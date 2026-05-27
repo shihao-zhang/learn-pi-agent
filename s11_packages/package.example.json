@@ -1,0 +1,17 @@
+{
+  "name": "@example/pi-product-workflows",
+  "version": "0.1.0",
+  "description": "Example Pi package bundling product-manager workflows.",
+  "type": "module",
+  "pi": {
+    "prompts": ["prompts/*.md"],
+    "skills": ["skills"],
+    "extensions": ["extensions/*.ts"],
+    "themes": []
+  },
+  "peerDependencies": {
+    "@earendil-works/pi-coding-agent": "*",
+    "typebox": "*"
+  },
+  "dependencies": {}
+}
