@@ -8,7 +8,7 @@
 
 Pi 是一个极简终端 coding agent harness。它的核心不是“把智能写进流程图”，而是给已经具备 coding agency 的模型提供足够清楚的工作环境：少量工具、可观察上下文、可热加载扩展、可保存会话、可嵌入运行时。
 
-截至 2026-05-27 已核验的官方事实：
+截至 2026-05-28 已核验的官方事实：
 
 - 官方仓库是 [earendil-works/pi](https://github.com/earendil-works/pi)。
 - 官方文档入口是 [pi.dev/docs/latest](https://pi.dev/docs/latest)。
@@ -99,9 +99,32 @@ Pi 的“极简”不是没有工程，而是把工程集中在几个关键位�
 | [s11](s11_packages/README.md) | Pi Packages | 把 prompts、skills、extensions、themes 打包分发 |
 | [s12](s12_comprehensive/README.md) | Comprehensive | 所有机制回到一个可解释的 harness |
 
+## 如何阅读每章
+
+每章都按同一套学习节奏组织，避免读者只看到零散概念：
+
+1. 先看“本章要解决的问题”，确认这个机制为什么存在。
+2. 再看“为什么上一章不够”，理解章节之间的递进关系。
+3. 读“机制拆解”和图示，把抽象概念放进 harness 的运行链路里。
+4. 跑 `code.mjs`，然后对照“代码导读”看教学 mock 如何表达机制。
+5. 最后读“对应真实 Pi”和“教学简化 vs 生产差异”，区分官方事实、教学类比和本仓库的简化。
+
+这套读法刻意把“产品机制”和“代码实现”分开：产品经理可以重点读问题、图示、边界；工程读者可以继续下钻到 mock code 和真实 Pi 文档。
+
+## 章节学习地图
+
+| 阶段 | 章节 | 你会建立的能力 |
+|---|---|---|
+| 最小运行时 | s01-s02 | 看懂 agent loop、tool call、tool registry，以及为什么工具接口比 prompt 技巧更稳定 |
+| 上下文注入 | s03-s05 | 区分常驻规则、可复用 prompt、按需加载 skill，理解 progressive disclosure |
+| 行为扩展 | s06 | 知道什么时候需要 TypeScript extension，以及 extension 为什么是强能力也是强风险 |
+| 状态与模型 | s07-s08 | 理解 session tree、分支、模型切换、多 provider adapter 的产品复杂度 |
+| 边界控制 | s09 | 把权限看成 harness gate，而不是一句“请小心”的 prompt |
+| 产品化 | s10-s12 | 理解 SDK embedding、package 分发，以及如何把前面机制组装回一个完整 harness |
+
 ## 快速开始
 
-本仓库的教学 demo 不依赖真实 LLM，也不需要安装 Pi：
+本仓库的教学 demo 不依赖真实 LLM，也不需要安装 Pi；请从仓库根目录运行这些命令：
 
 ```bash
 npm run check
@@ -117,6 +140,8 @@ cd /path/to/project
 pi
 ```
 
+这里保留 `--ignore-scripts` 是为了降低全局安装第三方包时的生命周期脚本风险；如果官方安装说明后续变化，以最新文档为准。
+
 项目内已经放了 Pi 原生资源样例：
 
 ```text
@@ -127,6 +152,8 @@ pi
 ```
 
 在真实 Pi 会话里，修改这些文件后运行 `/reload`，让资源重新发现。
+
+注意：`.pi/extensions/protect-dangerous.ts` 是教学最小样例，不是生产级 shell sandbox 或完整权限系统。真实项目使用第三方或本地 extension 前，应先 review 源码和非交互模式行为。
 
 ## 学习路径
 
