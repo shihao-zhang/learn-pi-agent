@@ -57,13 +57,21 @@ async function listMarkdownFiles(directory) {
 }
 
 const markdownLinks = /\[[^\]]+\]\(([^)]+)\)/g;
+let skippedExternalLinks = 0;
+
 for (const file of await listMarkdownFiles(root)) {
   const content = await readFile(file, "utf8");
   for (const match of content.matchAll(markdownLinks)) {
     const target = match[1];
     if (
       target.startsWith("http://") ||
-      target.startsWith("https://") ||
+      target.startsWith("https://")
+    ) {
+      skippedExternalLinks += 1;
+      continue;
+    }
+
+    if (
       target.startsWith("#") ||
       target.startsWith("mailto:")
     ) {
@@ -77,4 +85,6 @@ for (const file of await listMarkdownFiles(root)) {
   }
 }
 
-console.log(`check-links: ${lessonDirs.length} lessons and core resources found`);
+console.log(
+  `check-links: ${lessonDirs.length} lessons and core resources found; skipped ${skippedExternalLinks} external links`,
+);

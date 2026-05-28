@@ -3,15 +3,18 @@
   "version": "0.1.0",
   "description": "Example Pi package bundling product-manager workflows.",
   "type": "module",
+  "keywords": ["pi-package", "pi", "agent", "product-management"],
   "pi": {
     "prompts": ["prompts/*.md"],
     "skills": ["skills"],
     "extensions": ["extensions/*.ts"],
-    "themes": []
+    "themes": ["themes/*.json"]
   },
   "peerDependencies": {
     "@earendil-works/pi-coding-agent": "*",
     "typebox": "*"
   },
-  "dependencies": {}
+  "dependencies": {
+    "zod": "^3.25.0"
+  }
 }
