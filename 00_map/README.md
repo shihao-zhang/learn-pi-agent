@@ -64,7 +64,7 @@ prompt → 外层 follow-up 循环 ┐
 
 ### 横切线 2:Token / 上下文经济学——progressive disclosure 为什么存在
 上下文窗口有限,所以 Pi 处处在省 token:skill 先只暴露 catalog、用到才加载全文;**compaction** 在 `contextTokens > contextWindow - reserveTokens`(默认 `reserveTokens=16384`、`keepRecentTokens=20000`)时自动摘要旧消息;tool result 序列化时截断到 2000 字符。
-→ 涉及章:s05(渐进披露)、**compaction 专章(规划新增)**。这条线现在的覆盖最弱,是相对成熟 harness 教材的最大差距。
+→ 涉及章:s05(渐进披露)、[s13 compaction](../s13_compaction/README.md)(上下文经济学专章)。
 
 ### 横切线 3:信任与来源——什么是代码,什么只是数据
 - **extension / package 是代码**,以你的系统权限运行(`extensions.md:110`)→ 安装前必须 review 源码。
@@ -74,7 +74,7 @@ prompt → 外层 follow-up 循环 ┐
 
 ### 横切线 4:可观测性——agent 在做什么,系统怎么看见
 Pi 有一套 runtime-agnostic 的 trace 设计(`pi.agent.*` / `pi.ai.*` span 事件、默认脱敏白/黑名单),把 agent 内部进度变成结构化事件,供 UI / 日志 / 审计 / 测试消费。RPC、JSON event stream 模式是它的对外形态。
-→ 涉及章:s10(SDK/事件)、**observability 专章(规划新增)**、s07(session 作为可恢复状态)。
+→ 涉及章:s10(SDK/事件)、[s14 observability](../s14_observability/README.md)(trace 专章)、s07(session 作为可恢复状态)。
 
 ---
 
@@ -139,8 +139,8 @@ Pi 有一套 runtime-agnostic 的 trace 设计(`pi.agent.*` / `pi.ai.*` span 事
 | SDK embed | L2/L3 | [s10](../s10_sdk_embed/README.md) | 把 Pi 当可嵌入 runtime;事件流是耳朵 |
 | packages | L3 | [s11](../s11_packages/README.md) | 把 prompts/skills/extensions/themes 打包分发 |
 | comprehensive | 全 | [s12](../s12_comprehensive/README.md) | 所有机制回到一张架构图 |
-| **compaction**(规划) | L3 | _新增中_ | 横切线2:上下文经济学的核心 |
-| **observability**(规划) | L1+L2 | _新增中_ | 横切线4:agent 进度怎么被看见 |
+| compaction | L3 | [s13](../s13_compaction/README.md) | 横切线2:上下文经济学的核心 |
+| observability | L1+L2 | [s14](../s14_observability/README.md) | 横切线4:agent 进度怎么被看见 |
 
 ---
 

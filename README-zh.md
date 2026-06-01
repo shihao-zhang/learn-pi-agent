@@ -101,6 +101,8 @@ Pi 的“极简”不是没有工程，而是把工程集中在几个关键位�
 | [s10](s10_sdk_embed/README.md) | SDK Embed | Pi 可以作为引擎嵌进自己的应用 |
 | [s11](s11_packages/README.md) | Pi Packages | 把 prompts、skills、extensions、themes 打包分发 |
 | [s12](s12_comprehensive/README.md) | Comprehensive | 所有机制回到一个可解释的 harness |
+| [s13](s13_compaction/README.md) | Compaction | 上下文经济学:旧消息换成结构化摘要 |
+| [s14](s14_observability/README.md) | Observability | 把 agent 进度变成 trace 树,默认脱敏 |
 
 ## 如何阅读每章
 

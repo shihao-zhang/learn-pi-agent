@@ -5,7 +5,7 @@
   "description": "Chinese-first learning project for Pi agent harness engineering.",
   "type": "module",
   "scripts": {
-    "check": "node scripts/check-links.mjs && node s01_agent_loop/code.mjs && node s02_tool_dispatch/code.mjs && node s03_context_files/code.mjs && node s04_prompt_templates/code.mjs && node s05_skills/code.mjs && node s06_extensions/code.mjs && node s07_sessions/code.mjs && node s08_models/code.mjs && node s09_permissions/code.mjs && node s10_sdk_embed/code.mjs && node s11_packages/code.mjs && node s12_comprehensive/code.mjs",
+    "check": "node scripts/check-links.mjs && node s01_agent_loop/code.mjs && node s02_tool_dispatch/code.mjs && node s03_context_files/code.mjs && node s04_prompt_templates/code.mjs && node s05_skills/code.mjs && node s06_extensions/code.mjs && node s07_sessions/code.mjs && node s08_models/code.mjs && node s09_permissions/code.mjs && node s10_sdk_embed/code.mjs && node s11_packages/code.mjs && node s12_comprehensive/code.mjs && node s13_compaction/code.mjs && node s14_observability/code.mjs",
     "lesson:s01": "node s01_agent_loop/code.mjs",
     "lesson:s02": "node s02_tool_dispatch/code.mjs",
     "lesson:s03": "node s03_context_files/code.mjs",
@@ -17,7 +17,9 @@
     "lesson:s09": "node s09_permissions/code.mjs",
     "lesson:s10": "node s10_sdk_embed/code.mjs",
     "lesson:s11": "node s11_packages/code.mjs",
-    "lesson:s12": "node s12_comprehensive/code.mjs"
+    "lesson:s12": "node s12_comprehensive/code.mjs",
+    "lesson:s13": "node s13_compaction/code.mjs",
+    "lesson:s14": "node s14_observability/code.mjs"
   },
   "keywords": [
     "pi",

@@ -25,8 +25,8 @@ const lessonDirs = (await readdir(root))
   .filter((name) => /^s\d\d_/.test(name))
   .sort();
 
-if (lessonDirs.length !== 12) {
-  throw new Error(`Expected 12 lesson directories, found ${lessonDirs.length}.`);
+if (lessonDirs.length !== 14) {
+  throw new Error(`Expected 14 lesson directories, found ${lessonDirs.length}.`);
 }
 
 for (const dir of lessonDirs) {
