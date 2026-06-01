@@ -107,7 +107,7 @@
 - 包名和安装命令（如 `@earendil-works/pi-coding-agent`、`--ignore-scripts` 适用性）
 - 默认模型和 provider 列表
 - extension event 名称（如 `tool_call`、`tool_result`）和 handler 返回 shape
-- session format 字段名、entry 类型（`session`、`agent_start` 等）
+- session format 字段名、entry 类型（如 `message`、`model_change`）；以及生命周期事件名（如 `agent_start`、`turn_start`）——二者是两套概念，不要混用
 - `frontmatter` 字段（skills、prompt templates、packages）
 - `allowed-tools` 等实验性能力的当前状态
 

@@ -178,7 +178,7 @@ You need **runtime control plane**: state, queues, interception points, recovera
 
 ```text
 00 this page
- → s01 + L2 AgentHarness orchestration (phase / turn snapshot / save point / queue)
+ → s01 + L2 AgentHarness orchestration (internals not yet in .evidence; unverified)
  → s06 extensions (events: observational vs. control/mutation; tool_call can block, tool_result can be rewritten)
  → s09 permissions (where the deterministic gate lives)
  → cross-cutting thread 4: observability (trace design, redaction boundaries)

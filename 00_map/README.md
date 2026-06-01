@@ -23,7 +23,7 @@
 │      harness 运行时:                                          │
 │        · 裸 agent loop   (agent-loop.ts)                      │
 │        · AgentHarness 编排层 (harness/agent-harness.ts)       │
-│          phase / turn snapshot / save point / 队列 / 持久化   │
+│          (编排层;内部细节未纳入 evidence,待核验)             │
 ├─────────────────────────────────────────────────────────────┤
 │  L1  pi-ai            (packages/ai)                           │
 │      统一多 provider LLM API:30+ provider / OAuth / compat    │
@@ -33,7 +33,7 @@
 | 层 | 包 | 它负责什么 | 它**不**负责什么 |
 |---|---|---|---|
 | **L1 pi-ai** | `packages/ai` | 把不同 provider 的 wire 协议、认证、模型 compat flag 收口成一个统一 API | 不知道"工具""会话""技能"是什么 |
-| **L2 pi-agent-core** | `packages/agent` | 跑 agent loop;`AgentHarness` 管 turn 快照、save point、steer/followUp 队列、持久状态 | 不知道 `read`/`bash` 具体怎么实现,不管 TUI |
+| **L2 pi-agent-core** | `packages/agent` | 跑 agent loop;`AgentHarness`(`harness/agent-harness.ts`)在其上加一层编排——其内部细节(turn/队列/持久状态等)**未纳入本轮 evidence**,字段级说法视为待核验 | 不知道 `read`/`bash` 具体怎么实现,不管 TUI |
 | **L3 pi-coding-agent** | `packages/coding-agent` | 把 L2 包装成能用的终端 coding agent:内置工具、资源发现、扩展、权限门、压缩、会话 UI | 不重复造 loop;loop 在 L2 |
 
 > 为什么这张图重要:你想做的事落在**哪一层**,决定了你该读哪些章、该改哪些代码。
@@ -100,7 +100,7 @@ Pi 有一套 runtime-agnostic 的 trace 设计(`pi.agent.*` / `pi.ai.*` span 事
 
 ```text
 00 本页
- → s01 + L2 AgentHarness 编排层(phase/turn snapshot/save point/队列)
+ → s01 + L2 AgentHarness 编排层(编排细节未纳入 evidence,待核验)
  → s06 extensions(事件:观察型 vs 控制/变更型;tool_call 可 block、tool_result 可改)
  → s09 permissions(确定性 gate 落在哪)
  → 横切线4 observability(trace 设计、脱敏边界)

@@ -49,7 +49,7 @@ s01 的重点是解释 agent loop，所以它故意把工具部分讲得很轻�
 | `name` | 给模型和 registry 使用的稳定 ID | 不写业务逻辑 |
 | `description` | 告诉模型什么时候该用这个工具 | 不承担权限控制 |
 | `parameters` | 描述输入 schema，并做基础校验 | 不读取真实文件或网络 |
-| `permission` | 决定 allow、ask、block | 不直接执行业务动作 |
+| `permission` | 决定是否拦截:本章 mock 用 `allow`/`block` 两态;真实 Pi 是单一 `block` 门(详见下文与 s09) | 不直接执行业务动作 |
 | `handler` | 执行真实动作并返回结果 | 不决定自己是否可见 |
 
 ### 1. Registry：工具注册表
