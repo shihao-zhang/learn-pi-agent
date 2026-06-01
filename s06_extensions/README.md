@@ -55,39 +55,57 @@ flowchart TD
 
 ### ExtensionAPI
 
-真实 Pi 扩展通常是一个默认导出的 TypeScript 函数，入口类型是 `ExtensionAPI`。
-本章代码为了讲清机制，把注册工具和命令写成 `registerTool` / `registerCommand` 这样的教学 mock 名称；真实 Pi 的具体方法名、参数和返回值以官方 Extensions 文档为准。
+真实 Pi 扩展是一个默认导出的 TypeScript 函数，入口类型是 `ExtensionAPI`。
+下面这些方法名(`pi.on` / `pi.registerTool` / `pi.registerCommand`)**就是真实 API**,不是教学 mock —— 可直接对照 [`extensions.md`](https://github.com/earendil-works/pi-mono/blob/main/packages/coding-agent/docs/extensions.md) 的 Quick Start(`extensions.md:63-99`)。
 
 ```ts
 import type { ExtensionAPI } from "@earendil-works/pi-coding-agent";
+import { Type } from "typebox";
 
 export default function myExtension(pi: ExtensionAPI) {
-  pi.on("tool_call", async (event, ctx) => {});
-  // Teaching mock names. Check Pi docs before writing production extensions.
-  pi.registerTool({ name: "my_tool", /* ... */ });
-  pi.registerCommand("hello", { handler: async (args, ctx) => {} });
+  pi.on("tool_call", async (event, ctx) => {
+    if (event.toolName === "bash" && event.input.command?.includes("rm -rf")) {
+      const ok = await ctx.ui.confirm("Dangerous!", "Allow rm -rf?");
+      if (!ok) return { block: true, reason: "Blocked by user" };
+    }
+  });
+  pi.registerTool({
+    name: "greet",
+    label: "Greet",              // label 必填
+    description: "Greet someone",
+    parameters: Type.Object({ name: Type.String() }),  // 注意字段名是 parameters(TypeBox),不是 schema
+    async execute(toolCallId, params, signal, onUpdate, ctx) {  // 5 参签名
+      return { content: [{ type: "text", text: `Hello ${params.name}` }], details: {} };
+    },
+  });
+  pi.registerCommand("hello", { description: "Say hello", handler: async (args, ctx) => {} });
 }
 ```
 
-这里的 `pi` 不是模型，而是 Pi harness 给扩展的控制面。
-常见能力可以按四类理解：
-- 事件：通过 extension 订阅 lifecycle events，本章 mock 表达为 `pi.on(eventName, handler)`。
-- 工具：通过 extension 暴露 custom tools，本章 mock 表达为 `pi.registerTool(definition)`。
-- 命令：通过 extension 暴露 custom commands，本章 mock 表达为 `pi.registerCommand(name, definition)`。
-- UI / 上下文：`ctx.ui.confirm`、`ctx.ui.notify`、`ctx.cwd`、`ctx.sessionManager`。
+这里的 `pi` 不是模型，而是 Pi harness 给扩展的控制面。常见能力四类:
+- **事件**:`pi.on(event, handler)` 订阅生命周期事件。
+- **工具**:`pi.registerTool(definition)` 暴露 custom tool(`name` / `label` / `description` / `parameters` / `execute`)。
+- **命令**:`pi.registerCommand(name, definition)` 暴露 `/command`。
+- **UI / 上下文**:`ctx.ui.{confirm,select,input,notify}`、`ctx.cwd`、`ctx.sessionManager`、`ctx.signal` 等。
 
-重要权衡：Extension 是代码，拥有本机执行权限。
-它比 prompt 和 skill 更强，也更危险。
-所以 Extension 应该小、清晰、可审计。
+> 字段名易错点(已核验 `extensions/types.ts`):custom tool 的输入 schema 字段叫 **`parameters`**(TypeBox `TSchema`,`types.ts:438`),不是 `schema`;`label` 是**必填**(`types.ts:430`);`execute` 是 **5 参** `(toolCallId, params, signal, onUpdate, ctx)`(`types.ts:455`)。
 
-## Event Hook 拆解
+重要权衡:Extension 是代码,拥有本机执行权限(`extensions.md:110` 安全声明)。它比 prompt 和 skill 更强,也更危险。所以 Extension 应该小、清晰、可审计。
 
-Event hook 是 Pi 在生命周期关键点发出的事件。
-扩展监听后，可以观察、修改，或返回控制结果。
+## 事件拆解:观察型 vs 控制/变更型
 
-本章代码重点模拟两个事件：
-- `tool_call`：工具执行前触发，是 prehook。
-- `tool_result`：工具执行后触发，是 posthook。
+Pi 的所有扩展事件都用同一个 `pi.on(event, handler)` 订阅,但**返回值契约不同**,这是理解 extension 的关键分界:
+
+| 类别 | 例子 | handler 返回值的作用 |
+|---|---|---|
+| **观察型**(多数) | `agent_start/end`、`turn_start/end`、`message_start/update`、`session_start` | 返回值被忽略,只能观察 |
+| **控制/变更型**(少数) | `tool_call`、`tool_result`、`context`、`before_agent_start`、`message_end`、`session_before_*` | 返回值改变后续行为(拦截/改写/取消/替换) |
+
+> 这套"返回值是否生效"的分界,在 `pi-agent-core` 底层(`AgentHarness`)被进一步形式化为只读的 `observe()` 与可参与语义的 `on(type, …)` 两类(设计见仓库 `packages/agent/docs/hooks.md`)。coding-agent 的 extension 层统一用 `pi.on`,语义差异体现在"返回值有没有用"上。
+
+本章代码重点模拟两个**控制/变更型**事件:
+- `tool_call`:工具执行前触发,**可 block**(`extensions.md:676`)。
+- `tool_result`:工具执行后触发,**可改写结果**(`extensions.md:739`)。
 
 `tool_call` 适合做：
 - 危险命令拦截。
@@ -107,6 +125,13 @@ Event hook 是 Pi 在生命周期关键点发出的事件。
 - 明确禁止：直接 block。
 - 高风险：弹确认或走审批。
 - 低风险：允许，但记录日志。
+
+真实行为契约(已核验,写生产 extension 必须知道):
+
+- **`tool_call` 的 `event.input` 是可变的**:就地改它就能在执行前 patch 工具参数;改后**不会重新校验**;后面的 `tool_call` 处理器能看到前面的改动;返回值**只**通过 `{ block: true, reason? }` 控制拦截(`extensions.md:682-688`)。
+- **`tool_call` 只 block,不能改结果**;**`tool_result` 只改结果,不能拦执行**。两者是工具执行前后的两个不同钩子。
+- **`tool_result` 像中间件链**:按 extension 加载顺序执行,每个处理器看到前一个改完的结果,可返回 `content`/`details`/`isError` 的**部分 patch**,省略字段保持原值(`extensions.md:743-746`)。
+- **并行工具模式下**:同一条 assistant 消息的多个工具调用先**顺序 preflight**(逐个跑 `tool_call`),再**并发执行**;此时 `tool_call` 不保证能从 `ctx.sessionManager` 看到同批兄弟工具的结果(`extensions.md:680`)。
 
 ## Custom Tool 拆解
 
@@ -187,20 +212,26 @@ node s06_extensions/code.mjs
 
 ## 对应真实 Pi
 
-截至 2026-05-28，本章按官方资料核验：
-- Pi 是 terminal coding harness，可通过 TypeScript extensions、skills、prompt templates、themes、packages 扩展。
-- 当前官方仓库是 `earendil-works/pi`。
-- 当前 CLI 包名是 `@earendil-works/pi-coding-agent`。
-- 官方 Extension 文档使用 `ExtensionAPI` 作为扩展入口类型。
-- 项目级扩展路径包括 `.pi/extensions/*.ts` 和 `.pi/extensions/*/index.ts`。
-- 官方 Extensions 文档覆盖 lifecycle events、custom tools、custom commands 和 `ctx.ui` 交互；具体 API 名称与签名以官方文档为准。
-- `tool_call` 在工具执行前触发，可以 block 或修改 input。
-- `tool_result` 在工具执行后触发，可以修改结果。
+> 事实基准:Pi monorepo commit `dbb9911a`(2026-05-30),npm `@earendil-works/pi-coding-agent@0.78.0`。
+> 以下 `file:line` 仅对该 commit 有效;易过期点见末尾"事实核验清单"。
 
-参考：
-- [Pi Documentation](https://pi.dev/docs/latest)
-- [Pi Extensions](https://pi.dev/docs/latest/extensions)
-- [Pi moved to Earendil Works](https://pi.dev/news/2026/5/7/pi-has-a-new-home)
+已逐行核验:
+
+- 入口类型 `ExtensionAPI`,默认导出函数;`pi.on` / `pi.registerTool` / `pi.registerCommand` 是真实方法(`extensions.md:63-99`)。
+- 扩展自动发现路径(`extensions/loader.ts:546`):
+  - 全局 `~/.pi/agent/extensions/*.ts` 或 `*/index.ts`
+  - 项目 `.pi/extensions/*.ts` 或 `*/index.ts`
+  - **加载顺序**:项目级 → 全局 → settings 指定;`pi -e ./path.ts` 仅用于临时测试,可被 `/reload` 热重载。
+- **工具事件全集**(执行前后):`tool_execution_start` → `tool_call`(可 block) → `tool_execution_update` → `tool_result`(可改) → `tool_execution_end`(`extensions/types.ts:682`)。
+- `tool_call` 返回 `{ block?: boolean; reason?: string }`;`event.input` 可变、改后不重校验、later-handler 见前者改动(`extensions.md:682-688`;`types.ts:986`)。
+- `tool_result` 中间件链,按加载顺序,返回 `content/details/isError` 部分 patch、later-wins(`types.ts:1000`)。
+- 其他控制/变更型事件:`context`(改 messages)、`before_agent_start`(注入消息/改 system prompt)、`message_end`(返回 `{message}` 替换,须同 role,`extensions.md:535`)、`session_before_compact/tree/switch/fork`(可 cancel 或自定义)。
+- `session_start`/`session_shutdown` 的 reason 取值:`startup|reload|new|resume|fork`(`types.ts:516`)。
+- 拥有 typed `tool_call`/`tool_result` 的内置工具:`bash, read, edit, write, grep, find, ls`(`types.ts:824`);用 `isToolCallEventType` 收窄类型。
+- 可导入的包:`@earendil-works/pi-coding-agent`、`-agent-core`、`-tui`、`-ai`,加 `typebox`(`extensions/loader.ts:96`);旧 `@mariozechner/*` 别名仍解析。
+- `ctx.hasUI` 在 print(`-p`)/JSON 模式为 `false`,interactive/RPC 为 `true`;非交互模式下确认类 UI 需降级(`extensions.md:865`)。
+
+官方入口:[Pi Extensions](https://pi.dev/docs/latest/extensions) · 源码 [`extensions.md`](https://github.com/earendil-works/pi-mono/blob/main/packages/coding-agent/docs/extensions.md) · [`extensions/types.ts`](https://github.com/earendil-works/pi-mono/blob/main/packages/coding-agent/src/core/extensions/types.ts)
 
 ## 教学简化 vs 生产差异
 
@@ -234,16 +265,16 @@ node s06_extensions/code.mjs
 ## 事实核验清单
 
 写真实 Pi 扩展前，至少核验：
-- 官方仓库是否仍是 `earendil-works/pi`。
-- npm 包名是否仍是 `@earendil-works/pi-coding-agent`。
+- 官方仓库规范名是否仍是 `earendil-works/pi-mono`(`/pi` 别名);npm 包名是否仍是 `@earendil-works/pi-coding-agent`(当前 `0.78.0`)。
 - `ExtensionAPI` 的导入路径是否变化。
-- `.pi/extensions/*.ts` 是否仍支持项目级自动发现。
-- `pi -e ./path.ts` 或 `--extension` 的加载方式是否变化。
-- `tool_call` 返回 `{ block: true, reason }` 的语义是否变化。
-- `tool_result` 可修改字段是否变化。
-- `ctx.ui.confirm` 在 interactive、print、JSON、RPC 模式下表现是否一致。
-- custom tool 的 `execute` 签名是否变化。
-- custom command 的 `handler` 参数是否变化。
+- 扩展自动发现路径与**加载顺序**(项目→全局→settings)是否变化:`extensions/loader.ts:546`。
+- custom tool 的输入字段名是否仍是 **`parameters`**(不是 `schema`)、`label` 是否仍必填、`execute` 是否仍 5 参:`types.ts:430,438,455`。
+- `tool_call` 返回 `{ block?, reason? }` 语义、`event.input` 可变且不重校验是否变化:`types.ts:986`、`extensions.md:682-688`。
+- `tool_result` 部分 patch(`content/details/isError`)、later-wins 是否变化:`types.ts:1000`。
+- 工具事件五连(`tool_execution_start`→`tool_call`→`update`→`tool_result`→`end`)顺序是否变化:`types.ts:682`。
+- `session_start`/`session_shutdown` 的 reason 取值是否变化:`types.ts:516`。
+- 拥有 typed 工具事件的内置工具集是否变化:`types.ts:824`。
+- `ctx.hasUI` 在 print/JSON/interactive/RPC 各模式行为是否变化:`extensions.md:865`。
 
 ## 小结
 

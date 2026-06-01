@@ -1,29 +1,22 @@
+// s09 教学 mock:对齐真实 Pi 的"工具执行门"机制。
+//
+// 真实 Pi 没有权限系统,也没有 allow/ask/block 三态枚举。
+// 它只在工具执行前发出 `tool_call` 事件,处理器可返回:
+//   { block?: boolean; reason?: string }
+// 不返回 / block 不为真 = 隐式放行;返回 block:true = 拦截,reason 回灌模型。
+// 依据(commit dbb9911a):
+//   packages/coding-agent/src/core/extensions/types.ts:986  ToolCallEventResult
+//   packages/coding-agent/src/core/extensions/runner.ts:796   first-block-wins
+//
+// 因此本 mock 用单一布尔门 + first-block-wins,而不是三态机。
+// "询问用户(ask)"不是内置态,是在处理器内部用 ctx.ui.select 自己拼出来的。
+
 import path from "node:path";
 
-const ACTIONS = new Set(["allow", "ask", "block"]);
-
-class PermissionDecision {
-  constructor(action, reason, options = {}) {
-    if (!ACTIONS.has(action)) {
-      throw new Error(`Unknown permission action: ${action}`);
-    }
-    this.action = action;
-    this.reason = reason;
-    this.rule = options.rule ?? "default";
-    this.details = options.details ?? {};
-  }
-
-  static allow(reason, options) {
-    return new PermissionDecision("allow", reason, options);
-  }
-
-  static ask(reason, options) {
-    return new PermissionDecision("ask", reason, options);
-  }
-
-  static block(reason, options) {
-    return new PermissionDecision("block", reason, options);
-  }
+// ---- tool_call 处理器的返回类型:只有 block 一个开关 ----
+// 放行就返回 undefined(或 {});拦截就返回 { block: true, reason }。
+function blockResult(reason, details = {}) {
+  return { block: true, reason, details };
 }
 
 const mutatingTools = new Set(["write", "edit"]);
@@ -32,7 +25,6 @@ const pathTools = new Set(["read", "write", "edit"]);
 const credentialPatterns = [
   /(^|[/\\])\.env($|[./\\])/,
   /(^|[/\\])\.npmrc$/,
-  /(^|[/\\])\.pypirc$/,
   /(^|[/\\])id_rsa$/,
   /(^|[/\\])credentials\.json$/,
   /(^|[/\\])secrets?($|[./\\])/i,
@@ -43,15 +35,6 @@ const dangerousShellPatterns = [
   /\bsudo\b/,
   /\bchmod\s+777\b/,
   /\bcurl\b.+\|\s*(sh|bash)\b/,
-  /\bwget\b.+\|\s*(sh|bash)\b/,
-];
-
-const readonlyShellAllowList = [
-  /^pwd$/,
-  /^ls(\s|$)/,
-  /^rg(\s|$)/,
-  /^cat\s+[\w./-]+$/,
-  /^node\s+--version$/,
 ];
 
 function resolveTargetPath(call, context) {
@@ -69,16 +52,13 @@ function looksLikeCredentialPath(targetPath) {
   return credentialPatterns.some((pattern) => pattern.test(targetPath));
 }
 
-function commandLooksDangerous(command) {
-  return dangerousShellPatterns.some((pattern) => pattern.test(command));
-}
-
+// 命令字符串里凭证名前后通常是空格/引号,而非路径分隔符,需单独匹配。
 function commandTouchesCredentials(command) {
   return /(^|[\s"'=])\.env($|[\s"'])|id_rsa\b|credentials\.json\b|\.npmrc\b|secret/i.test(command);
 }
 
-function isReadonlyShellCommand(command) {
-  return readonlyShellAllowList.some((pattern) => pattern.test(command.trim()));
+function commandLooksDangerous(command) {
+  return dangerousShellPatterns.some((pattern) => pattern.test(command));
 }
 
 function summarizeCall(call) {
@@ -87,142 +67,114 @@ function summarizeCall(call) {
   return call.name;
 }
 
-function preflightDecision(call, context) {
+// ---- 处理器 1:硬禁止(凭证、越界写)。直接 block,不问人。----
+// 对应真实 extension 里一个不依赖 UI 的 tool_call 处理器。
+function denyHardRules(call, context) {
   const targetPath = resolveTargetPath(call, context);
   const command = String(call.input?.command ?? "");
 
-  if (context.readonly && mutatingTools.has(call.name)) {
-    return PermissionDecision.block("readonly mode blocks file mutation", {
-      rule: "readonly-file-mutation",
-    });
-  }
-
-  if (context.readonly && call.name === "bash" && !isReadonlyShellCommand(command)) {
-    return PermissionDecision.block("readonly mode only allows read-only shell commands", {
-      rule: "readonly-shell",
-    });
-  }
-
   if (targetPath && looksLikeCredentialPath(targetPath)) {
-    return PermissionDecision.block("credential paths are never exposed to tools", {
-      rule: "credential-path",
-      details: { targetPath },
-    });
+    return blockResult("credential paths are never exposed to tools", { targetPath });
   }
-
   if (targetPath && mutatingTools.has(call.name) && !isInsideWorkspace(targetPath, context)) {
-    return PermissionDecision.block("writes outside the workspace are blocked", {
-      rule: "workspace-write-boundary",
-      details: { targetPath },
-    });
+    return blockResult("writes outside the workspace are blocked", { targetPath });
   }
-
-  if (targetPath && call.name === "read" && !isInsideWorkspace(targetPath, context)) {
-    return PermissionDecision.ask("reading outside the workspace needs user approval", {
-      rule: "workspace-read-boundary",
-      details: { targetPath },
-    });
-  }
-
   if (call.name === "bash" && commandTouchesCredentials(command)) {
-    return PermissionDecision.block("shell command appears to touch credentials", {
-      rule: "credential-shell",
-    });
+    return blockResult("shell command appears to touch credentials");
   }
+  return undefined; // 隐式放行,交给下一个处理器
+}
 
+// ---- 处理器 2:把"ask"拼出来。----
+// Pi 没有 ask 态;这里用 ctx.ui.select 在处理器内部实现"问一下",
+// 用户拒绝就翻译成 block:true,用户同意就放行(返回 undefined)。
+async function askOnDangerousShell(call, context) {
+  const command = String(call.input?.command ?? "");
   if (call.name === "bash" && commandLooksDangerous(command)) {
-    return PermissionDecision.ask("destructive or privileged shell command", {
-      rule: "dangerous-shell",
-    });
+    const choice = await context.ui.select(`允许危险命令吗?\n  ${command}`, ["允许", "拒绝"]);
+    if (choice !== "允许") {
+      return blockResult(`user denied dangerous command: ${command}`);
+    }
   }
-
-  return PermissionDecision.allow("no matching restriction", {
-    rule: "default-allow",
-  });
+  // 越界读也走"问一下"
+  const targetPath = resolveTargetPath(call, context);
+  if (call.name === "read" && targetPath && !isInsideWorkspace(targetPath, context)) {
+    const choice = await context.ui.select(
+      `允许读取 workspace 外文件吗?\n  ${targetPath}`,
+      ["允许", "拒绝"],
+    );
+    if (choice !== "允许") {
+      return blockResult(`user denied out-of-workspace read: ${targetPath}`);
+    }
+  }
+  return undefined;
 }
 
-function recordAudit(context, call, preflight, finalDecision) {
-  context.auditLog.push({
-    at: context.now(),
-    call: summarizeCall(call),
-    rule: preflight.rule,
-    preflight: preflight.action,
-    final: finalDecision.action,
-    reason: finalDecision.reason,
-  });
-}
-
-async function evaluatePermission(call, context) {
-  const preflight = preflightDecision(call, context);
-  let finalDecision = preflight;
-
-  if (preflight.action === "ask") {
-    const approved = await context.askUser({ call, decision: preflight });
-    finalDecision = approved
-      ? PermissionDecision.allow(`user approved: ${preflight.reason}`, {
-          rule: preflight.rule,
-          details: preflight.details,
-        })
-      : PermissionDecision.block(`user denied: ${preflight.reason}`, {
-          rule: preflight.rule,
-          details: preflight.details,
-        });
+// ---- harness 侧:顺序执行所有 tool_call 处理器,first-block-wins ----
+// 对应 runner.ts:796 的聚合语义:任一返回 block:true 即早退。
+async function emitToolCall(call, context, handlers) {
+  for (const handler of handlers) {
+    const result = await handler(call, context);
+    if (result?.block) {
+      context.auditLog.push({ call: summarizeCall(call), blocked: true, reason: result.reason });
+      return { blocked: true, reason: result.reason, details: result.details ?? {} };
+    }
   }
-
-  recordAudit(context, call, preflight, finalDecision);
-  return finalDecision;
+  context.auditLog.push({ call: summarizeCall(call), blocked: false });
+  return { blocked: false };
 }
 
 function createDemoContext(overrides = {}) {
   return {
     workspaceRoot: "/demo/workspace",
-    readonly: false,
     auditLog: [],
-    now: () => "2026-05-28T00:00:00.000Z",
-    askUser: async ({ call, decision }) => {
-      const approved = call.name === "read";
-      console.log(`askUser: ${summarizeCall(call)} -> ${approved ? "allow" : "deny"}`);
-      console.log(`  reason: ${decision.reason}`);
-      return approved;
+    // 模拟 ctx.ui.select:真实 Pi 在交互模式下弹选择框,非交互模式需降级。
+    ui: {
+      select: async (prompt, _options) => {
+        // 教学固定策略:危险命令一律拒绝,体现"ask = block + UI"。
+        console.log(`ui.select: ${prompt.split("\n")[0]} -> 拒绝`);
+        return "拒绝";
+      },
     },
     ...overrides,
   };
 }
 
-async function runScenario(title, context, calls) {
+async function runScenario(title, context, handlers, calls) {
   console.log(`\n== ${title} ==`);
   for (const call of calls) {
-    const decision = await evaluatePermission(call, context);
-    console.log(`${summarizeCall(call)} -> ${decision.action} (${decision.reason})`);
+    const decision = await emitToolCall(call, context, handlers);
+    const verdict = decision.blocked ? `blocked (${decision.reason})` : "allowed";
+    console.log(`${summarizeCall(call)} -> ${verdict}`);
   }
 }
 
 async function main() {
-  const normalContext = createDemoContext();
-  await runScenario("normal mode", normalContext, [
-    { name: "read", input: { path: "README.md" } },
-    { name: "write", input: { path: "notes.md" } },
-    { name: "read", input: { path: "../shared/design.md" } },
-    { name: "write", input: { path: "../outside.txt" } },
-    { name: "read", input: { path: ".env" } },
-    { name: "bash", input: { command: "sudo npm install -g demo" } },
-    { name: "bash", input: { command: "cat .env" } },
+  const handlers = [denyHardRules, askOnDangerousShell];
+  const context = createDemoContext();
+
+  await runScenario("tool_call gate (单 block 门 + first-block-wins)", context, handlers, [
+    { name: "read", input: { path: "README.md" } }, // 隐式放行
+    { name: "write", input: { path: "notes.md" } }, // 隐式放行
+    { name: "read", input: { path: "../shared/design.md" } }, // 处理器2 问 -> 拒 -> block
+    { name: "write", input: { path: "../outside.txt" } }, // 处理器1 硬 block
+    { name: "read", input: { path: ".env" } }, // 处理器1 硬 block
+    { name: "bash", input: { command: "sudo npm install -g demo" } }, // 处理器2 问 -> 拒 -> block
+    { name: "bash", input: { command: "cat .env" } }, // 处理器1 硬 block(命中凭证名)
+    { name: "bash", input: { command: "npm test" } }, // 隐式放行
   ]);
 
-  const readonlyContext = createDemoContext({ readonly: true });
-  await runScenario("readonly mode", readonlyContext, [
-    { name: "read", input: { path: "README.md" } },
-    { name: "bash", input: { command: "rg permissions s09_permissions" } },
-    { name: "write", input: { path: "notes.md" } },
-    { name: "bash", input: { command: "npm test" } },
-  ]);
-
-  console.log("\n== audit log sample ==");
-  for (const entry of [...normalContext.auditLog, ...readonlyContext.auditLog]) {
-    console.log(`${entry.final.padEnd(5)} ${entry.rule.padEnd(24)} ${entry.call}`);
+  console.log("\n== audit log(harness 记录的真实事实)==");
+  for (const entry of context.auditLog) {
+    const tag = entry.blocked ? "BLOCK" : "allow";
+    console.log(`${tag.padEnd(5)} ${entry.call}${entry.reason ? `  (${entry.reason})` : ""}`);
   }
+
+  console.log(
+    "\n注意:本 mock 只有 block 一个开关。'拒绝' 是用 ui.select 拼出来的,不是 Pi 的内置态。",
+  );
 }
 
 await main();
 
-export { PermissionDecision, evaluatePermission, preflightDecision };
+export { emitToolCall, denyHardRules, askOnDangerousShell };

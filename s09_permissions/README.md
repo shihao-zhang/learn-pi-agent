@@ -1,250 +1,178 @@
-# s09 Permissions
+# s09 Permissions（工具执行门）
+
+> 事实基准:Pi monorepo `dbb9911a`(2026-05-30),npm `@earendil-works/pi-coding-agent@0.78.0`。
+> 本章引用的 `file:line` 均对应该 commit;易过期点见末尾"事实核验清单"。
+
 ## 本章要解决的问题
 
-这一章回答一个很实际的问题：
-当 agent 已经能读文件、写文件、改代码、跑 shell，它应该什么时候被允许直接执行？
+agent 能调用 `bash`,就意味着它能运行任意命令。这是能力,也是风险。
 
-具体要解决五件事：
-- 哪些工具调用可以自动放行？
-- 哪些动作必须先问人？
-- 哪些动作无论模型怎么解释都应该阻止？
-- 如何留下 audit log，让团队事后知道 agent 做过什么？
-- workspace 外路径、凭证文件、shell 命令为什么是高风险区？
+权限要解决的是一个很窄、但很关键的问题:**在某次工具调用真正执行之前,harness 是否要把它拦下来。**
 
-产品上，这不是“让 agent 变笨”。
-它是在给强能力加可解释的出口。
+一句话:
 
-没有权限系统的 agent，常见事故很朴素：
-- 用户说“检查一下”，模型顺手写了文件。
-- 用户说“装一下依赖”，模型跑了全局 `sudo npm install -g ...`。
-- 用户说“看看配置”，模型读到了 `.env`。
-- 用户说“清理缓存”，模型删了不该删的目录。
-- 出事后，没人说得清是哪条工具调用造成的。
+```text
+工具存在 ≠ 每次调用都允许。
+```
 
-本章的目标，是把权限做成 harness 的 preflight gate：
-工具真正执行前，先把调用变成一条结构化决策。
+但这里有一个产品经理特别容易踩的坑,本章必须先讲清楚:
+
+> **Pi 没有一个独立的"权限系统",也没有 allow / ask / block 三态枚举。**
+> 它只有一个布尔开关:工具执行前的 `tool_call` hook,允许处理器返回 `{ block: true, reason }` 把这次调用拦下来。其余一切(询问用户、黑名单、审批)都是你在这个布尔开关之上自己搭出来的。
+
+这正是 Pi "极简"哲学的典型体现:harness 只给一个最小拦截点,策略留给使用者。
 
 ## 为什么上一章不够
 
-s08 讲模型选择。
-它解决的是：同一个 agent harness 如何适配不同 provider、消息格式和 session 继续。
+s06 讲了 extension 的 hook 机制,但没有聚焦到一个具体问题上:**当模型请求一个危险动作时,那个拦截点(`tool_call` hook)的真实契约到底是什么?** 这就是本章。
 
-但模型层解决不了权限问题。
+## 真实机制:一个布尔门,不是三态机
 
-原因很简单：
-- 模型可以理解规则，但不能保证每次都遵守规则。
-- prompt 可以提醒“不要读 `.env`”，但工具调用仍可能已经发出。
-- provider 可以换，但本机文件系统、shell、凭证风险不会消失。
-- 高风险动作需要确定性 gate，而不是自然语言建议。
+### 1. 决策点:工具执行前的 `tool_call` 事件
 
-所以权限应该靠 harness 执行，而不是靠模型自觉。
+Pi 的工具执行链路上,事件按固定顺序触发(源码确认):
 
-Pi 这类终端 coding harness 可以按四层理解：
-- 模型负责提出下一步。
-- 工具负责执行动作。
-- harness 负责把上下文、权限、扩展、审计串起来。
-- 人类在高风险节点保留最终决定权。
+```text
+tool_execution_start  →  tool_call(可拦截)  →  执行 handler  →  tool_result(可改写)  →  tool_execution_end
+```
 
-## 机制拆解
+`tool_call` 是唯一能"阻止执行"的点。
+依据:`packages/coding-agent/src/core/extensions/types.ts:682`(事件类型定义)。
 
-权限系统可以先拆成四个词：
+### 2. 决策结果:只有 `block?: boolean`
 
-1. `allow`：低风险动作，直接执行，例如读取 workspace 内普通源码文件。
-2. `ask`：风险可接受，但需要人确认，例如读取 workspace 外文件或执行带 `sudo` 的命令。
-3. `block`：风险不可接受，直接阻止，例如读取 `.env`、写 workspace 外路径、readonly 模式改文件。
-4. `audit`：不管结果如何，都记录“谁想做什么、命中了什么规则、最终是否执行”。
+`tool_call` 处理器(handler,即你注册给该事件的回调)返回的类型是:
 
-一个实用的权限门至少有三层：
-- 输入归一：把 tool call 变成统一结构。
-- 规则判定：用稳定规则产出 `allow / ask / block`。
-- 决策落盘：把 preflight 和最终结果写入 audit log。
+```ts
+// packages/coding-agent/src/core/extensions/types.ts:986
+interface ToolCallEventResult {
+  block?: boolean;
+  reason?: string;
+}
+```
 
-本章代码把这个结构压缩成一个教学版：
-- `PermissionDecision`：结构化表达权限结果。
-- `preflightDecision(call, context)`：不问人，只看规则。
-- `evaluatePermission(call, context)`：必要时调用 `askUser`，并写 audit log。
-- `context.readonly`：模拟只读模式。
-- `context.workspaceRoot`：模拟 workspace 边界。
-- `context.auditLog`：模拟审计记录。
+注意:**没有 `allow`,没有 `ask`,没有 enum。**
 
-## Mermaid 图示
+- 不返回 / 返回 `{}` / `block` 不为真 → 调用照常执行(这就是隐式的 "allow")。
+- 返回 `{ block: true, reason }` → 这次调用被拦,`reason` 回到模型上下文。
+
+多个处理器顺序执行,**任一返回 `block:true` 即早退**(first-block-wins)。
+依据:`packages/coding-agent/src/core/extensions/runner.ts:796`(`emitToolCall` 返回 `{ blocked, reason }`)。
+
+### 3. "询问用户(ask)"不是内置态,是你拼出来的
+
+很多人以为 Pi 有"ask 用户确认"的权限态。**源码里没有。**
+要实现 ask,你在 `tool_call` 处理器内部自己调 UI:
+
+```ts
+// 教学伪代码:ask 是 block 之上的自定义逻辑,不是内置枚举
+pi.on("tool_call", async (event, ctx) => {
+  if (isDangerous(event)) {
+    const ok = await ctx.ui.select("允许这次危险命令吗?", ["允许", "拒绝"]);
+    if (ok !== "允许") return { block: true, reason: "用户拒绝" };
+  }
+});
+```
+
+也就是说:**block 是机制,ask 是你用 block + UI 组合出的策略。**
+
+### 4. 没有持久权限策略文件
+
+证据:在整个 checkout 里 `find -iname '*permission*'` **只匹配到一个示例** `examples/extensions/permission-gate.ts`;
+`settings.json` 里**没有 `permissions` 键**,没有预批准命令 allowlist,没有策略引擎。
+
+产品含义:Pi 不替你做策略管理。想要"团队级危险命令黑名单 / 审批流",得自己用 extension + 配置实现。
+
+### 5. 顺带:`tool_result` 也能改(对照理解)
+
+和 `tool_call` 对称,执行后的 `tool_result` 事件可以 patch 结果(`content` / `details` / `isError`,later-wins)。
+依据:`packages/coding-agent/src/core/extensions/types.ts:1000`。
+这说明 Pi 的控制面是"两个钩子":一个拦执行(`tool_call`),一个改结果(`tool_result`)。
+
+## Mermaid 图示(已修正为真实二态)
 
 ```mermaid
 flowchart TD
-  Model["模型提出 tool call"] --> Gate["preflight gate"]
-  Gate --> Normalize["归一 call + context"]
-  Normalize --> Rules["规则判定"]
-  Rules -->|allow| Execute["执行工具"]
-  Rules -->|ask| AskUser["askUser / UI confirm"]
-  AskUser -->|approve| Execute
-  AskUser -->|deny| Blocked["阻止执行"]
-  Rules -->|block| Blocked
-  Execute --> Audit["写 audit log"]
-  Blocked --> Audit
-  Audit --> Loop["把结果交回 agent loop"]
+  A["tool_execution_start"] --> B["tool_call 事件<br/>顺序执行各处理器"]
+  B --> C{"任一返回 block:true?"}
+  C -->|否(隐式 allow)| D["执行 tool handler"]
+  C -->|是| E["拦截:不执行<br/>reason 回到上下文"]
+  D --> F["tool_result 事件<br/>可 patch content/details/isError"]
+  E --> G["tool_execution_end"]
+  F --> G
 ```
 
-这张图里最重要的是 preflight gate 的位置。
-它在工具执行前，而不是执行后。
-
-如果工具已经读完 `.env`，再提醒模型“不要泄露凭证”就晚了。
-如果 `rm -rf` 已经跑完，再做审计只能复盘，不能保护。
-
-## 风险分类
-
-本章重点看四类风险。
-
-第一类是 workspace 风险。
-workspace 是 agent 当前被授权工作的目录，读写都应该默认围绕它展开。
-
-典型规则：
-- 读 workspace 内文件：通常 allow。
-- 读 workspace 外文件：通常 ask。
-- 写 workspace 外文件：通常 block。
-- 路径解析必须处理 `../`，不能只做字符串前缀判断。
-
-第二类是 credential 风险。
-`.env`、`.npmrc`、`id_rsa`、`credentials.json`、`secret*` 这类文件可能包含 API key、token、私钥、数据库密码。
-
-典型规则：
-- 读凭证路径：block。
-- 写凭证路径：block，或只允许专门工具。
-- shell 命令触碰凭证名：至少 block 或 ask。
-- audit log 里不要记录凭证内容。
-
-第三类是 shell 风险。
-`bash` 是最强也最危险的工具之一，可以改文件、联网、安装依赖、启动后台进程、访问系统目录。
-
-典型规则：
-- `rg`、`ls`、`pwd` 这类查询命令：可 allow。
-- `sudo`、`rm -rf`、`chmod 777`、`curl | sh`：至少 ask。
-- 触碰凭证文件的命令：倾向 block。
-- 生产环境命令：单独建规则，不能靠模型猜。
-
-第四类是模式风险。
-同一个工具调用，在不同模式下风险不一样。
-
-例如 readonly 模式：
-- `read README.md` 可以 allow。
-- `write notes.md` 应该 block。
-- `bash "rg xxx"` 可以 allow。
-- `bash "npm test"` 可能写缓存或生成文件，教学版选择 block。
-
-这就是 context 的价值：
-权限不是只看工具名，还要看当前模式、workspace、用户身份、运行环境。
+> 图里只有"拦 / 不拦"两态,没有 allow / ask / block 三分支。ask 是 block 之上的自定义,不是图里的一条边。
 
 ## 代码导读
 
-运行：
+运行:
 
 ```bash
 node s09_permissions/code.mjs
 ```
 
-这份代码不执行真实 shell，也不读写真实文件。
-它只模拟工具调用进入权限门后的结果。
+`code.mjs` 实现了一个单 `block?:boolean` 门,与本 README 的契约一致,演示三件事:
 
-主要对象：
-- `PermissionDecision`：统一表达 `allow / ask / block`，并携带 `reason`、`rule`、`details`。
-- `preflightDecision(call, context)`：只做规则判定，不触发 UI，适合写单元测试。
-- `evaluatePermission(call, context)`：调用 preflight；如果结果是 `ask`，再调用注入的 `context.askUser`；最后写入 `context.auditLog`。
-- `askUser`：教学版用函数注入；真实产品里可能是 TUI confirm、Web 弹窗、企业审批流或 API 回调。
-- `auditLog`：教学版是内存数组；真实产品里要考虑 session 归档、隐私脱敏、日志留存周期。
+- **两个 `tool_call` 处理器顺序执行,first-block-wins**:`denyHardRules`(硬禁止凭证/越界写,不问人)和 `askOnDangerousShell`(危险命令/越界读时调 `ctx.ui.select` 问一下)。
+- **拦截返回 `{ block, reason }`**,对应 `ToolCallEventResult`;被拦的调用不抛异常,而是一条稳定的、带 `reason` 的结果回灌模型。
+- **ask 是拼出来的**:`askOnDangerousShell` 用 `ctx.ui.select` 把"问用户"翻译成 block 与否——Pi 没有 ask 内置态。
 
-示例场景覆盖：
-- 普通读写。
-- 读取 workspace 外文件，触发 ask。
-- 写 workspace 外文件，直接 block。
-- 读取 `.env`，直接 block。
-- `sudo npm install -g demo`，触发 ask 后被拒绝。
-- `cat .env`，因为触碰凭证被 block。
-- readonly 模式下允许只读查询，阻止写文件和非白名单 shell。
+读 code 时重点对照:`emitToolCall()` 的 first-block-wins 聚合,对应真实 `runner.ts:796`;而"是否危险"的规则是 mock 自己写的,真实 Pi 不内置任何危险判断。
+
+运行输出会显示 5 条 BLOCK / 3 条 allow,以及一行提醒:本 mock 只有 block 一个开关。
 
 ## 对应真实 Pi
 
-截至 2026-05-28，本章按官方资料核验：
-- Pi 当前官方仓库是 `earendil-works/pi`。
-- Pi 当前 CLI 包名是 `@earendil-works/pi-coding-agent`。
-- 官方文档里的 extension 入口类型是 `ExtensionAPI`。
-- extension 可以监听 lifecycle events，包括工具相关事件。
-- `tool_call` 在工具执行前触发。
-- `tool_call` handler 可以通过返回 `{ block: true, reason }` 阻止工具执行。
-- 官方文档说明 `tool_call` 中修改 `event.input` 会影响真实工具执行。
-- 官方文档提供 `ctx.ui.confirm` 这类用户确认能力。
-- 非交互模式下 UI 可能不可用，扩展应检查 `ctx.hasUI` 或设计降级策略。
-- Pi 支持用 `-e, --extension <source>` 显式加载 extension，也支持禁用自动发现。
+截至 commit `dbb9911a`,已逐行核验:
 
-参考资料：
-- [Pi Documentation](https://pi.dev/docs/latest)
+- 工具执行前的拦截点是 extension 的 `tool_call` 事件,在 `tool_execution_start` 之后、handler 执行之前触发:`extensions/types.ts:682`。
+- 返回类型是 `ToolCallEventResult { block?: boolean; reason?: string }`,**无 allow/ask 枚举**:`extensions/types.ts:986`。
+- 多处理器 first-block-wins,聚合返回 `{ blocked, reason }`:`extensions/runner.ts:796`。
+- 拥有 typed `tool_call`/`tool_result` 事件的内置工具:`bash, read, edit, write, grep, find, ls`:`extensions/types.ts:824`。
+- 全仓库无独立 permissions 目录/无持久策略;唯一相关物是示例 `examples/extensions/permission-gate.ts`。
+
+官方文档入口(注意:**没有** `permissions` 专页,权限语义在 extensions 文档内):
+
 - [Pi Extensions](https://pi.dev/docs/latest/extensions)
-- [Using Pi](https://pi.dev/docs/latest/usage)
-- [Pi Has a New Home at Earendil](https://pi.dev/news/2026/5/7/pi-has-a-new-home)
+- 源码:[`extensions/types.ts`](https://github.com/earendil-works/pi-mono/blob/main/packages/coding-agent/src/core/extensions/types.ts)
 
-本仓库也有一个真实形态示例：[`.pi/extensions/protect-dangerous.ts`](../.pi/extensions/protect-dangerous.ts)。
-它监听 `tool_call`，只处理 `bash`，匹配 `rm -rf`、`sudo`、写入 `.env` 等危险命令。
-命中后用 `ctx.ui.confirm` 询问用户；用户拒绝时返回 block。
-
-本章的 `PermissionDecision` 不是 Pi 官方 API 名称。
-它是为了教学，把真实 extension hook 背后的产品机制显性化。
+> 重要更正:本章 v1 曾引用 `https://pi.dev/docs/latest/permissions` 并描述 allow/ask/block 三态。**该 URL 不存在,该模型也不存在**,已删除。这正是本仓库"不要把不确定内容包装成官方事实"红线要防的错误。
 
 ## 教学简化 vs 生产差异
 
-本章代码故意简单。
-
-教学简化：
-- 不调用真实 Pi，也不执行真实 shell。
-- 不读写真实文件系统。
-- 不实现完整路径权限模型。
-- 不解析 shell AST，只用正则识别高风险命令。
-- 不处理多用户、多角色、多 workspace。
-- audit log 只存在内存里。
-- `askUser` 用固定策略模拟，不连接真实 UI。
-- readonly 模式只做少量白名单。
-
-生产差异：
-- 路径判断要处理 symlink、大小写文件系统、mount、容器路径映射。
-- shell 判断不能只靠正则，至少要有保守策略和 allowlist。
-- 凭证保护要覆盖读取、搜索、命令输出、错误日志和 audit 脱敏。
-- ask 流程要考虑无人值守、CI、RPC、JSON、print 等非交互模式。
-- block 原因要给人看得懂，但不能泄露敏感细节。
-- 多个 extension 的顺序会影响最终决策。
-- 修改 `event.input` 后要小心，因为官方文档说明不会自动重新校验。
-- 权限策略最好能测试，避免靠临场提示词。
-
-一个稳妥的产品原则：
-能自动证明低风险的才 allow；风险不清楚但可接受的 ask；涉及凭证、越界写入、破坏性动作的默认 block。
+| 主题 | 本章 mock | 真实 Pi / 生产 |
+|---|---|---|
+| 决策态 | block / 不 block 二态 | 同为二态(`block?:boolean`),无 allow/ask 枚举 |
+| 危险判断 | 硬编码规则 | Pi 不内置,由你在 `tool_call` 处理器实现 |
+| ask 用户 | 不演示 | `ctx.ui.select` 在处理器内自行实现 |
+| 策略来源 | 单一 mock | 多 extension 顺序执行,first-block-wins |
+| 持久策略 | 无 | 仍无内置;团队黑名单需自建 extension+配置 |
+| 审计 | 无 | 可在 `tool_call`/`tool_result` 处理器里写日志 |
 
 ## 练习
 
-1. 给 `dangerousShellPatterns` 增加 `git push --force`，观察它触发 ask。
-2. 把 `askUser` 改成：只批准 `read`，拒绝所有 `bash`。
-3. 增加一个 `network` 模式：readonly 下默认阻止 `curl`、`wget`、`ssh`。
-4. 把 audit log 输出改成 JSON Lines，方便后续接入日志系统。
-5. 新增规则：`edit package-lock.json` 需要 ask，普通源码文件 allow。
-6. 思考：如果用户明确说“读取我的 .env”，教学版为什么仍然 block？
-7. 思考：如果 agent 需要写 `.env.example`，规则应该如何区分它和 `.env`？
-8. 设计一个团队策略表：动作、风险、默认决策、是否可被用户覆盖。
+1. 把 mock 拦截函数的返回从布尔改造成 `{ block, reason }`,确认 `reason` 出现在回灌给模型的 tool result 里。
+2. 实现"ask":拦截到危险命令时,用一个模拟的 `ui.select` 决定 block 与否,体会 ask = block + UI。
+3. 注册第二个 `tool_call` 处理器,验证 first-block-wins:前一个不拦、后一个拦,最终结果是拦。
+4. 思考:为什么 Pi 选择只给 `block` 一个布尔,而不内置 allow/ask/block 三态?这对"极简 harness"意味着什么?
+5. 设计题:你要做"团队级危险命令黑名单",在 Pi 里应该落在哪一层(extension? package? settings?),数据从哪来?
 
 ## 事实核验清单
 
-写真实 Pi 权限 extension 前，至少核验：
-- 当前官方仓库是否仍是 `earendil-works/pi`。
-- 当前 CLI 包名是否仍是 `@earendil-works/pi-coding-agent`。
-- `ExtensionAPI` 的导入路径是否变化。
-- `.pi/extensions/*.ts` 和 `.pi/extensions/*/index.ts` 的自动发现规则是否变化。
-- `-e, --extension <source>` 的显式加载方式是否变化。
-- `tool_call` 的事件名、event 字段、block 返回语义是否变化。
-- 修改 `event.input` 后是否仍然不会自动重新校验。
-- `ctx.ui.confirm` 和 `ctx.hasUI` 在不同模式下的行为是否变化。
-- 官方是否新增了更原生的 permission API。
-- 你的扩展是否会和其他权限扩展发生顺序冲突。
-- audit log 是否会记录敏感输入或命令输出。
-- readonly 模式是否覆盖了 shell、edit、write、custom tools。
+写权限相关内容时,下面这些不要凭记忆:
+
+- `tool_call` 事件的触发时机(是否仍在 `tool_execution_start` 后、handler 前):`extensions/types.ts:682`。
+- 返回类型是否仍是 `{ block?, reason? }`、是否仍无 allow/ask 枚举:`extensions/types.ts:986`。
+- 多处理器是否仍 first-block-wins:`extensions/runner.ts:796`。
+- 是否仍**不存在** `pi.dev/docs/latest/permissions` 专页 —— 若官方新增,需更新本章。
+- 是否仍**没有** settings 级 `permissions` 策略键。
+- 拥有 typed 工具事件的内置工具集是否变化:`extensions/types.ts:824`。
+
+底线:**Pi 的权限不是一套系统,而是一个布尔拦截点。** 把它讲成三态机,就是把教学想象冒充成 Pi 事实。
 
 ## 小结
 
-权限不是 prompt 文案。
-权限是工具执行前的产品机制。
-
-本章的核心心法：
-把 agent 的每一次真实动作，都先变成一条可解释、可测试、可审计的决策。
+Permissions 在 Pi 里被刻意做小:一个 `tool_call` 钩子 + 一个 `block?:boolean`。
+能力虽小,位置却关键 —— 它是模型"想做"和环境"准做"之间唯一的确定性闸门。
+更复杂的策略(ask、黑名单、审批、审计)都不是 Pi 替你做的,而是你在这个最小闸门之上自己组装的。这既是 Pi 的克制,也是使用者的责任。

@@ -41,13 +41,13 @@ flowchart TD
   I --> M["Append to messages[]"]
   K --> M
   L --> M
-  M --> N{"maxTurns reached?"}
+  M --> N{"maxTurns reached?<br/>(本教学 harness 的保护)"}
   N -->|no| C
-  N -->|yes| O["Stop: max_turns"]
+  N -->|yes| O["Stop: maxTurns"]
 ```
 这张图有两个产品含义：
 - 工具错误不一定终止任务。很多时候，错误只是下一轮模型的输入。
-- `maxTurns` 是产品保护，不是模型能力。没有它，错误 prompt、坏工具描述或模型犹豫都可能导致无意义循环。
+- 必须有明确的停止边界,否则错误 prompt、坏工具描述或模型犹豫都可能导致无意义循环。本图用 `maxTurns` 表达这个边界,但这是**本教学 harness 的发明**;真实 Pi 把停止边界交给 `shouldStopAfterTurn` hook,loop 本身没有轮次计数器(详见下文 §7 和"对应真实 Pi")。
 ## 机制拆解
 ### 1. `messages[]` 是工作记忆
 `messages[]` 不是普通聊天记录。
@@ -93,20 +93,28 @@ unknown tool: search
 这对应真实产品里的权限门：工具存在，不代表每次调用都允许；允许 shell，不代表允许危险命令。
 后面的权限章节会把这个点展开。
 ### 7. Stop condition 必须明确
-最常见的停止条件有三个：
-- `no_tool_calls`：assistant 没有再请求工具，可以结束。
-- `max_turns`：循环超过上限，产品主动停止。
-- `abort`：用户或外部系统中断。
-本章代码演示前两个。
-`maxTurns` 的意义不是“模型很笨所以要管住它”，而是产品必须为所有自动化流程设计边界。
+
+本章教学 loop 演示两种停止:
+
+- **自然退出**:assistant 这一轮没有再请求工具，且没有排队消息，循环结束。
+- **`maxTurns` 上限**:循环超过本教学 harness 设定的上限，主动停止。
+
+> ⚠️ 重要边界:`maxTurns` 是**本教学 harness 自己发明的保护机制**,不是 Pi 的内置概念。
+> 我在整个 `packages/agent/src` 和 `packages/coding-agent/src` 里 grep 不到任何 `maxTurns` / `max_turns` 符号。
+> 真实 Pi 的 loop(`packages/agent/src/agent-loop.ts`)没有数值轮次上限,它的停止靠三件事:
+> - **自然退出**:本轮无 tool call 且无 steering/follow-up 排队消息 → 跳出循环发 `agent_end`(`agent-loop.ts:256`)。此时 assistant 的 `stopReason` 通常是 `stop`,**不是某个叫 `no_tool_calls` 的常量**。
+> - **错误/中断**:streamed assistant 的 `stopReason` 为 `"error"` 或 `"aborted"` → 立即结束(`agent-loop.ts:196`)。
+> - **每轮停止 hook**:调用方可提供 `config.shouldStopAfterTurn(ctx)`,返回 truthy 就在下一次 LLM 调用前结束(`agent-loop.ts:241`)。轮次限制(如果需要)就是用这个 hook 实现的,而不是 loop 内置计数器。
+
+所以本章要记住的不是"Pi 有 max_turns",而是:**任何自动化 loop 都必须有明确的停止边界**;Pi 把"边界策略"交给调用方的 hook,而不是写死在 loop 里。这正体现 Pi"少替模型/调用方做主"的取舍。
 ## 代码导读
 运行文件：
 ```bash
 node s01_agent_loop/code.mjs
 ```
 你会看到两段 demo 输出：
-- `completed`：正常 agent loop，经历 read、bash、write、edit、blocked command、unknown tool，最后因为没有新的 tool call 而结束。
-- `capped`：故意不停调用工具的模型，触发 `max_turns` 结束。
+- `completed`：正常 agent loop，经历 read、bash、write、edit、blocked command、unknown tool，最后因为没有新的 tool call 而**自然退出**。
+- `capped`：故意不停调用工具的模型，触发本教学 harness 的 `maxTurns` 上限而停止。再次提醒:`maxTurns` 是本 demo 的保护机制,真实 Pi 用 `shouldStopAfterTurn` hook 而非内置计数器实现等价边界。
 代码里有四个关键区域。
 第一段是内存工作区：
 ```js
@@ -130,13 +138,21 @@ for (let turn = 1; turn <= maxTurns; turn += 1) {
 它就是本章的 agent loop。
 第四段是 `executeTool()`，负责 dispatch、unknown tool 和错误结果回灌。
 ## 对应真实 Pi
-本章不是在复刻 Pi 内部实现，而是用最少代码复现 Pi 的关键产品结构。
-已核验的真实依据如下：
-- Pi 官方文档把 Pi 定位为 minimal terminal coding harness，并说明核心可通过 TypeScript extensions、skills、prompt templates、themes、packages 扩展：[Pi Documentation](https://pi.dev/docs/latest)。
-- Pi Quickstart 说明默认给模型四个工具：`read`、`write`、`edit`、`bash`，额外只读工具可通过 options 开启：[Quickstart](https://pi.dev/docs/latest/quickstart)。
-- Pi SDK 暴露 `createAgentSession()`，`AgentSession` 管理生命周期、消息历史、模型状态和事件流，也支持 `tools`、`customTools`、`defineTool()` 等入口：[SDK](https://pi.dev/docs/latest/sdk)。
-- Pi Extensions 文档说明 `tool_call` 事件发生在工具执行前，可用于阻止调用或修改工具输入：[Extensions](https://pi.dev/docs/latest/extensions)。
-- 官方 GitHub 仓库是 `earendil-works/pi`，monorepo 包含 `@earendil-works/pi-coding-agent`、`@earendil-works/pi-agent-core`、`@earendil-works/pi-ai` 等包：[GitHub](https://github.com/earendil-works/pi)。
+
+> 事实基准:Pi monorepo commit `dbb9911a`(2026-05-30),npm `@earendil-works/pi-coding-agent@0.78.0`。
+> 以下 `file:line` 仅对该 commit 有效;易过期点见末尾"事实核验清单"。
+
+本章不是在复刻 Pi 内部实现，而是用最少代码复现 Pi 的关键产品结构。已逐行核验:
+
+- 真实 agent loop 在 **`pi-agent-core`**(独立包 `packages/agent`),不在 coding-agent 里。低层 loop 是 `packages/agent/src/agent-loop.ts`:外层 follow-up 循环套内层 turn 循环,`while (hasMoreToolCalls || pendingMessages.length > 0)`(`agent-loop.ts:166`)。
+- tool call 是主路径:loop 过滤 assistant 内容里 `type === "toolCall"` 的部分并执行,结果 push 回 LLM 上下文和返回 transcript(`agent-loop.ts:203,208`)。
+- **停止条件**(本章重点,见上文 §7):自然退出(`agent-loop.ts:256`)、`stopReason` error/aborted(`agent-loop.ts:196`)、`shouldStopAfterTurn` hook(`agent-loop.ts:241`)。**无 maxTurns 计数器**。
+- 生命周期事件名:`agent_start / agent_end / turn_start / turn_end / message_start / message_update / message_end / tool_execution_start / tool_execution_update / tool_execution_end`(`packages/agent/src/types.ts:403`)。
+- 默认给模型四个工具 `read / write / edit / bash`,可选只读 `grep / find / ls`(`packages/coding-agent/docs/quickstart.md:77-84`;注册表 `core/tools/index.ts:83`)。
+- 裸 loop 之上还有 **`AgentHarness` 编排层**(`packages/agent/src/harness/agent-harness.ts`):它管 phase(`idle | turn | compaction | branch_summary | retry`)、turn snapshot、save point、steer/followUp/nextTurn 队列、pending writes。本章只建模裸 loop;编排层在 s07/s12 展开。
+- 官方仓库规范名 `earendil-works/pi-mono`(`/pi` 为别名);monorepo 含 `@earendil-works/pi-coding-agent`、`@earendil-works/pi-agent-core`、`@earendil-works/pi-ai`、`@earendil-works/pi-tui`。
+
+官方入口:[Pi Documentation](https://pi.dev/docs/latest) · [Quickstart](https://pi.dev/docs/latest/quickstart) · 源码 [`agent-loop.ts`](https://github.com/earendil-works/pi-mono/blob/main/packages/agent/src/agent-loop.ts)。
 ## 教学简化 vs 生产差异
 | 主题 | 本章教学版 | 真实生产版 |
 | --- | --- | --- |
@@ -146,14 +162,15 @@ for (let turn = 1; turn <= maxTurns; turn += 1) {
 | 权限 | `bash` 里硬编码阻止危险命令 | 通过权限系统、extension hook、用户确认、审计 |
 | 工具执行 | 顺序执行 | 可能并行执行，需要处理结果顺序和文件冲突 |
 | 消息格式 | 简化为普通对象 | 真实 Pi 有 session、event、tool result 等更丰富类型 |
-| 停止条件 | `no_tool_calls` 和 `max_turns` | 还会有 abort、compaction、retry、queue mode、session 切换 |
+| 停止条件 | 自然退出 + 教学版 `maxTurns` 上限 | 自然退出 + `stopReason` error/aborted + `shouldStopAfterTurn` hook;无内置 maxTurns。还有 abort、compaction、retry、queue mode、session 切换 |
 一个关键差异：真实 Pi extension 的 `tool_call` hook 可以在工具执行前拦截或修改输入。
 本章把“阻止危险命令”放在 `bash` handler 内部，是为了让第一章代码更短。
 后续章节会把它移到 loop 周边的 hook 机制。
 ## 练习
 ### 练习 1：改变停止上限
-把 `maxTurns: 2` 改成 `maxTurns: 1`，观察 `capped.stopReason` 是否仍然是 `max_turns`。
+把 `maxTurns: 2` 改成 `maxTurns: 1`，观察 `capped.stopReason`(本 demo 自定义的字面值 `max_turns`)。
 思考：为什么模型还没有机会“自己停下来”，产品就先停止了？
+进阶：真实 Pi 没有 `maxTurns`。如果要在真实 Pi 上实现"最多 N 轮就停",你会用哪个机制?(提示:`shouldStopAfterTurn` hook,见上文 §7)
 ### 练习 2：新增一个只读工具
 新增 `list` 工具，返回内存工作区中的文件名。
 要求：不改 `runAgent()`，只通过 `registerTool("list", handler)` 增加能力。
@@ -176,14 +193,15 @@ for (let turn = 1; turn <= maxTurns; turn += 1) {
 思考：哪些信息应该给模型看，哪些信息应该留给 UI、审计或 session 恢复？
 ## 事实核验清单
 写 Pi 教材时，下面这些点不要凭记忆写：
-- 当前安装包名是否仍是 `@earendil-works/pi-coding-agent`。
-- 官方仓库是否仍是 `https://github.com/earendil-works/pi`。
-- Quickstart 中默认工具是否仍是 `read`、`write`、`edit`、`bash`。
-- 额外只读工具 `grep`、`find`、`ls` 的启用方式是否变化。
+- agent loop 是否仍在 `packages/agent/src/agent-loop.ts`(独立 `pi-agent-core` 包,不在 coding-agent)。
+- loop 是否仍**没有** `maxTurns` / `max_turns` 内置计数器(grep 确认),停止是否仍靠自然退出 + `stopReason` error/aborted + `shouldStopAfterTurn` hook。
+- 生命周期事件名(`agent_start` 等十个)是否变化:`packages/agent/src/types.ts:403`。
+- 当前安装包名是否仍是 `@earendil-works/pi-coding-agent`(npm 当前 `0.78.0`)。
+- 官方仓库规范名是否仍是 `earendil-works/pi-mono`(`/pi` 别名)。
+- Quickstart 中默认工具是否仍是 `read`、`write`、`edit`、`bash`,可选 `grep`、`find`、`ls`。
 - SDK 是否仍使用 `createAgentSession()` 作为核心入口。
-- `customTools`、`defineTool()`、extension 注册工具的说法是否仍准确。
+- AgentHarness 编排层的 phase 集与队列语义是否变化。
 - `tool_call` hook 的触发时机、可修改输入、可阻止调用的语义是否变化。
-- session、RPC、JSON event stream 的事件名是否变化。
 如果其中任何一项变化，本章需要更新。
 不要把历史包名、旧仓库地址或旧命令当成“常识”沿用。
 ## 小结
