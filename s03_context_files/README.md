@@ -193,19 +193,21 @@ node s03_context_files/code.mjs
 
 ## 对应真实 Pi
 
-截至 2026-05-28，官方资料可以确认这些事实：
+> 事实基准:Pi monorepo commit `dbb9911a`(2026-05-30),npm `@earendil-works/pi-coding-agent@0.78.0`。以下 file:line 仅对该 commit 有效。
 
-- Pi 会在启动时加载 `AGENTS.md` 或 `CLAUDE.md` context files。
-- 官方 usage 文档明确包含全局 `~/.pi/agent/AGENTS.md`、父目录链、当前目录。
-- 可以用 `--no-context-files` 或 `-nc` 禁用 `AGENTS.md` / `CLAUDE.md` 发现。
+截至 commit `dbb9911a`(2026-05-30)，官方资料可以确认这些事实：
+
+- Pi 会在启动时加载 `AGENTS.md` 或 `CLAUDE.md` context files (`packages/coding-agent/src/core/resource-loader.ts:58`)。
+- 官方 usage 文档明确包含全局 `~/.pi/agent/AGENTS.md`、父目录链、当前目录 (`packages/coding-agent/docs/quickstart.md:98-103`；`packages/coding-agent/src/core/resource-loader.ts:85-110`)。
+- 可以用 `--no-context-files` 或 `-nc` 禁用 `AGENTS.md` / `CLAUDE.md` 发现 (`packages/coding-agent/src/cli/args.ts:265`)。
 - 交互命令 `/reload` 会重载 context files 以及其他资源。
-- SDK 的 `createAgentSession()` 通过 `ResourceLoader` 供应 extensions、skills、prompt templates、themes 和 context files。
-- SDK 示例中 `DefaultResourceLoader` 支持 `agentsFilesOverride`，也可以读取 `loader.getAgentsFiles().agentsFiles`。
+- SDK 的 `createAgentSession()` 通过 `ResourceLoader` 供应 extensions、skills、prompt templates、themes 和 context files (`packages/coding-agent/src/core/sdk.ts:204`；`packages/coding-agent/src/core/resource-loader.ts:28`)。
+- SDK 中 `DefaultResourceLoader` 支持 `agentsFilesOverride`，也可以读取 `loader.getAgentsFiles().agentsFiles` (`packages/coding-agent/src/core/resource-loader.ts:152`；`packages/coding-agent/src/core/resource-loader.ts:269`)。
 
 官方入口：
 
-- [Pi Using: Context Files](https://pi.dev/docs/latest/usage)
-- [Pi SDK: Context Files and ResourceLoader](https://pi.dev/docs/latest/sdk)
+- [Pi Using: Context Files](https://pi.dev/docs/latest/usage) (`packages/coding-agent/docs/quickstart.md:98-103`)
+- [Pi SDK: Context Files and ResourceLoader](https://pi.dev/docs/latest/sdk) (`packages/coding-agent/src/core/sdk.ts:204`；`packages/coding-agent/src/core/resource-loader.ts:28`)
 
 ## 教学简化 vs 生产差异
 

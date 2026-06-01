@@ -75,7 +75,7 @@ API type 是“走哪种协议”，例如 `anthropic-messages`、`openai-respon
 
 模型认证不是让模型“知道 API key”。认证属于 harness 的控制面。
 
-常见来源包括 OAuth token、`auth.json`、环境变量、SDK 运行时临时 key，以及 custom provider 在 `models.json` 中声明的 key。
+常见来源包括 OAuth token、`auth.json`（路径：`~/.pi/agent/auth.json`，权限 0600，packages/coding-agent/src/core/auth-storage.ts:69）、环境变量、SDK 运行时临时 key，以及 custom provider 在 `models.json` 中声明的 key。解析优先级：CLI `--api-key` > `auth.json` api_key > `auth.json` OAuth（自动刷新）> 环境变量 > `models.json` fallback（packages/coding-agent/src/core/auth-storage.ts:455）。
 
 这些信息不应该进入 prompt，也不应该进入 LLM context。模型只需要看到任务上下文；harness 才需要知道怎么鉴权、怎么隐藏密钥、怎么调用 provider。
 
@@ -85,7 +85,7 @@ API type 是“走哪种协议”，例如 `anthropic-messages`、`openai-respon
 
 `ModelRegistry` 的价值不是“放一个数组”。它把内置 provider/model、用户定义的 custom models、当前认证状态收口起来。
 
-因此它能回答三类问题：`find(provider, id)` 判断模型是否存在，`getAvailable()` 判断哪些模型真的有凭证可用，`compat` 告诉 adapter 调用时要避开哪些字段。
+因此它能回答三类问题：`find(query)` 按 id/名称检索模型，`list()` 列出所有已注册模型，`getProvider(providerId)` 获取 provider 配置，`compat` 告诉 adapter 调用时要避开哪些字段(packages/coding-agent/src/core/model-registry.ts:35)。
 
 没有 registry，模型选择会散落到 UI、配置、session 恢复、SDK 参数里。结果通常是：界面能选但调用失败，session 恢复后找不到模型，custom model 覆盖了内置模型却没人知道。
 
@@ -150,8 +150,8 @@ Custom models 的关键不是让用户手写任意 JSON，而是给用户一个�
 - `type: "model_change"`
 - `provider`
 - `modelId`
-- `api`
-- `reason`
+
+真实 Pi 的 `ModelChangeEntry` 只包含这三个字段(`type`、`provider`、`modelId`)，没有 `api` 或 `reason` 字段(packages/coding-agent/src/core/session-manager.ts:61-65)。本章教学代码额外加了 `api` 和 `reason` 用于演示，不代表真实 wire format。
 
 真实 Pi 的 session format 中也有 `model_change` entry。恢复上下文时，context builder 会沿着当前路径提取当前模型和 thinking level。
 
@@ -171,13 +171,15 @@ node s08_models/code.mjs
 
 ## 对应真实 Pi
 
-截至 2026-05-28，本章依据官方资料做了这些映射：
-- 官方 GitHub 仓库是 [earendil-works/pi](https://github.com/earendil-works/pi)，其中 `@earendil-works/pi-ai` 是 unified multi-provider LLM API，`@earendil-works/pi-coding-agent` 是交互式 coding agent CLI。
-- [Providers 文档](https://pi.dev/docs/latest/providers)描述了 subscription provider、API key provider、环境变量、`auth.json`、custom providers，以及认证解析顺序。
-- [Custom Models 文档](https://pi.dev/docs/latest/models)描述了通过 `~/.pi/agent/models.json` 添加 provider 和 model，支持 OpenAI Completions、OpenAI Responses、Anthropic Messages、Google Generative AI 等 API type。
-- 同一文档还描述了 provider-level 和 model-level `compat`，包括 OpenAI-compatible provider 的 `supportsStrictMode`、`supportsReasoningEffort`、`maxTokensField` 等兼容字段。
-- [SDK 文档](https://pi.dev/docs/latest/sdk)展示了 `AuthStorage`、`ModelRegistry`、`getModel()`、`modelRegistry.find()`、`getAvailable()`、`createAgentSession({ model, authStorage, modelRegistry })` 等入口。
-- [Session Format 文档](https://pi.dev/docs/latest/session-format)描述了 `message` entry、`model_change` entry、`thinking_level_change` entry，以及 context building 会提取当前模型和 thinking level。
+> 事实基准:Pi monorepo commit `dbb9911a`(2026-05-30),npm `@earendil-works/pi-coding-agent@0.78.0`。以下 file:line 仅对该 commit 有效。
+
+本章依据官方资料做了这些映射（基准见上方 commit 锚）：
+- 官方 GitHub 仓库是 [earendil-works/pi-mono](https://github.com/earendil-works/pi-mono)（`/pi` 是别名，canonical 名称为 `pi-mono`），其中 `@earendil-works/pi-ai` 是 unified multi-provider LLM API，`@earendil-works/pi-coding-agent` 是交互式 coding agent CLI。
+- [Providers 文档](https://pi.dev/docs/latest/providers)描述了 subscription provider、API key provider、环境变量、`auth.json`、custom providers，以及认证解析顺序(packages/coding-agent/docs/providers.md:3)。
+- [Custom Models 文档](https://pi.dev/docs/latest/models)描述了通过 `~/.pi/agent/models.json` 添加 provider 和 model，支持 OpenAI Completions、OpenAI Responses、Anthropic Messages、Google Generative AI 等 API type(packages/coding-agent/docs/models.md§Custom Models; packages/coding-agent/src/core/model-resolver.ts:30)。
+- 同一文档还描述了 provider-level 和 model-level `compat`，包括 OpenAI-compatible provider 的 `supportsStrictMode`、`supportsReasoningEffort`、`maxTokensField` 等兼容字段(packages/ai/src/types.ts:136)。
+- [SDK 文档](https://pi.dev/docs/latest/sdk)展示了 `AuthStorage`、`ModelRegistry`、`modelRegistry.get(modelId)`、`modelRegistry.find(query)`、`modelRegistry.list()`、`modelRegistry.getProvider(providerId)` 等入口(packages/coding-agent/src/core/model-registry.ts:35; packages/coding-agent/src/core/model-resolver.ts:88)。
+- [Session Format 文档](https://pi.dev/docs/latest/session-format)描述了 `message` entry、`model_change` entry、`thinking_level_change` entry，以及 context building 会提取当前模型和 thinking level(packages/coding-agent/src/core/session-manager.ts:138-147)。
 
 注意：本章引用的是机制级事实。具体模型列表、默认模型、价格、上下文长度、provider 可用性都可能随 Pi release 变化。
 
@@ -220,7 +222,7 @@ node s08_models/code.mjs
 ## 事实核验清单
 
 写真实 Pi 模型相关内容前，至少核验：
-- 官方仓库是否仍是 `earendil-works/pi`。
+- 官方仓库是否仍是 `earendil-works/pi-mono`（canonical 名称；`/pi` 为别名）。
 - CLI 包名是否仍是 `@earendil-works/pi-coding-agent`。
 - LLM API 包名是否仍是 `@earendil-works/pi-ai`。
 - `ModelRegistry` 和 `AuthStorage` 的导入路径是否变化。

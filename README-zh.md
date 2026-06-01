@@ -84,8 +84,11 @@ Pi 的“极简”不是没有工程，而是把工程集中在几个关键位�
 
 > 目标：从一个最小 loop，走到能解释 Pi 真实产品结构的教学 harness。
 
+> 先读 [00 机制地图](00_map/README.md):它讲清 Pi 的三层架构、四条横切线,并给出 AI 产品经理 / 平台设计者 / 工程读者三条跳读路径。**章号是顺序,机制地图才是结构。**
+
 | 章节 | 主题 | 一句话 |
 |---|---|---|
+| [00](00_map/README.md) | 机制地图 | 三层架构 + 横切线 + 三条读者路径(建议先读) |
 | [s01](s01_agent_loop/README.md) | Agent Loop | 一个循环 + 四个工具，是 Pi 的最小心脏 |
 | [s02](s02_tool_dispatch/README.md) | Tool Dispatch | 加工具时改 registry，不改 loop |
 | [s03](s03_context_files/README.md) | Context Files | AGENTS.md 是项目知识的入口，不是万能 prompt |

@@ -83,7 +83,7 @@ Additional focus: $ARGUMENTS
 
 `description` 告诉用户这个命令做什么；`argument-hint` 告诉用户参数怎么填，例如 `<target>` 表示必填，`[focus]` 表示可选。
 
-如果没有 `description`，官方文档当前描述为：Pi 会使用正文里的第一行非空内容作为描述。
+如果没有 `description`，官方文档当前描述为：Pi 会使用正文里的第一行非空内容作为描述（截断到 60 字符，超出时追加 `...`）。(`packages/coding-agent/src/core/prompt-templates.ts:112-120`)
 
 教学上可以把 frontmatter 理解为“命令卡片”，正文理解为“真正的 prompt”。
 
@@ -187,23 +187,25 @@ node s04_prompt_templates/code.mjs
 
 ## 对应真实 Pi
 
-截至 2026-05-28，官方资料可以确认这些事实：
+> 事实基准:Pi monorepo commit `dbb9911a`(2026-05-30),npm `@earendil-works/pi-coding-agent@0.78.0`。以下 file:line 仅对该 commit 有效。
 
-- Prompt templates 是 Markdown snippets，会展开成完整 prompt。
-- 输入 `/name` 会调用对应模板，`name` 来自文件名去掉 `.md`。
-- Pi 会从全局 `~/.pi/agent/prompts/*.md`、项目 `.pi/prompts/*.md`、packages、settings 和 CLI `--prompt-template <path>` 加载模板。
-- 可以用 `--no-prompt-templates` 禁用 prompt template discovery。
-- Frontmatter 支持 `description` 和 `argument-hint`；`argument-hint` 用于 autocomplete。
-- 参数替换支持 `$1`、`$2`、`$@`、`$ARGUMENTS`、`${@:N}`、`${@:N:L}`。
-- 官方文档当前说明：`prompts/` 里的模板发现是非递归的。
-- SDK 的 `DefaultResourceLoader` 可发现 prompts；也可以通过 `promptsOverride` 注入自定义 `PromptTemplate`。
+截至 2026-05-30，官方资料可以确认这些事实：
+
+- Prompt templates 是 Markdown snippets，会展开成完整 prompt。(`packages/coding-agent/docs/prompt-templates.md:5`)
+- 输入 `/name` 会调用对应模板，`name` 来自文件名去掉 `.md`。(`packages/coding-agent/src/core/prompt-templates.ts:109`)
+- Pi 会从全局 `~/.pi/agent/prompts/*.md`、项目 `.pi/prompts/*.md`、packages、settings 和 CLI `--prompt-template <path>` 加载模板。(`packages/coding-agent/docs/prompt-templates.md:11-15`; 实现: `packages/coding-agent/src/core/prompt-templates.ts:202-203`)
+- 可以用 `--no-prompt-templates` 禁用 prompt template discovery。(`packages/coding-agent/src/cli/args.ts:164`; alias `-np`)
+- Frontmatter 支持 `description` 和 `argument-hint`；`argument-hint` 用于 autocomplete。(`packages/coding-agent/src/core/prompt-templates.ts:112,125`)
+- 参数替换支持 `$1`、`$2`、`$@`、`$ARGUMENTS`、`${@:N}`、`${@:N:L}`。替换顺序：`$1..$N` 最先，然后 `${@:N}`/`${@:N:L}`，最后 `$ARGUMENTS` 和 `$@`。(`packages/coding-agent/src/core/prompt-templates.ts:71-99`)
+- 官方文档当前说明：`prompts/` 里的模板发现是非递归的。(`packages/coding-agent/src/core/prompt-templates.ts:136-169`)
+- SDK 的 `DefaultResourceLoader` 可发现 prompts；也可以通过 `promptsOverride` 注入自定义 `PromptTemplate`。(`packages/coding-agent/src/core/resource-loader.ts:115,152`)
 - Skills 是按需加载的能力包，和 prompt templates 是不同资源类型。
 
 官方入口：
 
-- [Pi Prompt Templates](https://pi.dev/docs/latest/prompt-templates)
+- [Pi Prompt Templates](https://pi.dev/docs/latest/prompt-templates) (`packages/coding-agent/docs/prompt-templates.md`)
 - [Pi Skills](https://pi.dev/docs/latest/skills)
-- [Pi SDK](https://pi.dev/docs/latest/sdk)
+- [Pi SDK](https://pi.dev/docs/latest/sdk) (`packages/coding-agent/src/core/sdk.ts`; `packages/coding-agent/src/index.ts`)
 
 ## 教学简化 vs 生产差异
 

@@ -144,25 +144,28 @@ node s10_sdk_embed/code.mjs
 注意命名差异：本章 `code.mjs` 用 `schema` 表达教学版 custom tool 输入契约；真实 SDK 参考 [sdk-example.ts](sdk-example.ts) 使用官方示例里的 `parameters` 字段。
 
 ## 对应真实 Pi
-截至 2026-05-28，本章按官方 Pi 文档核验：
-- Pi 官方 SDK 包含在 `@earendil-works/pi-coding-agent` 主包中。
+
+> 事实基准:Pi monorepo commit `dbb9911a`(2026-05-30),npm `@earendil-works/pi-coding-agent@0.78.0`。以下 file:line 仅对该 commit 有效。
+
+截至 commit `dbb9911a`，本章按官方 Pi 源码核验：
+- Pi 官方 SDK 包含在 `@earendil-works/pi-coding-agent` 主包中。(`packages/coding-agent/src/index.ts:165`)
 - 官方快速开始使用 `AuthStorage`、`ModelRegistry`、`SessionManager` 和 `createAgentSession()`。
-- `createAgentSession()` 是创建单个 `AgentSession` 的主要工厂函数。
-- 如果不传自定义 `ResourceLoader`，官方文档说明会使用 `DefaultResourceLoader` 做标准发现。
-- `AgentSession` 暴露 `prompt()`、`steer()`、`followUp()`、`subscribe()`、`setModel()`、`compact()`、`abort()`、`dispose()` 等能力。
-- session replacement，例如 new session、resume、fork、import，属于 `AgentSessionRuntime` 层，不是普通 `AgentSession` 自身职责。
-- 官方事件类型包含 `message_update`、`tool_execution_start/update/end`、`agent_start/end`、`turn_start/end` 等。
-- SDK 支持 `customTools` 和 `defineTool()`；如果显式传 `tools`，要把 custom tool 名也列进去。
-- 官方导出列表包含 `DefaultResourceLoader`、`ResourceLoader`、`createEventBus`、`SessionManager`、`SettingsManager`、tool factories 和相关类型。
+- `createAgentSession()` 是创建单个 `AgentSession` 的主要工厂函数；返回 `{ session, extensionsResult, modelFallbackMessage? }`。(`packages/coding-agent/src/core/sdk.ts:204`, `packages/coding-agent/src/core/sdk.ts:86`)
+- 如果不传自定义 `ResourceLoader`，会自动构造 `DefaultResourceLoader` 并 `await reload()`。(`packages/coding-agent/src/core/sdk.ts:218`)
+- `AgentSession` 暴露 `prompt()`、`steer()`、`followUp()`、`subscribe()`、`setModel()`、`compact()`、`abort()`、`dispose()` 等能力。(`packages/coding-agent/src/core/agent-session.ts:254`)
+- session replacement，例如 new session、resume、fork、import，属于 `AgentSessionRuntime` 层，不是普通 `AgentSession` 自身职责。(`packages/coding-agent/src/core/agent-session-runtime.ts:68`)
+- 官方事件类型包含 `message_update`、`tool_execution_start/update/end`、`agent_start/end`、`turn_start/end` 等。(`packages/agent/src/types.ts:403`)
+- SDK 支持 `customTools`（`ToolDefinition[]`）和 `defineTool()`；`tools` 选项是工具名字符串数组（allowlist），而非 Tool 实例。(`packages/coding-agent/src/core/sdk.ts:417`, `packages/coding-agent/src/core/sdk.ts:67`)
+- 官方导出列表包含 `DefaultResourceLoader`、`ResourceLoader`（类型）、`defineTool`、`createAgentSession`、`createAgentSessionRuntime`、`AgentSessionRuntime`、tool factories 和相关类型。(`packages/coding-agent/src/index.ts:163`, `packages/coding-agent/src/index.ts:177`)
 - 对非 Node.js 或需要进程隔离的集成，官方文档提供 RPC mode 与 JSON event stream mode。
 
 参考资料：
-- [Pi SDK](https://pi.dev/docs/latest/sdk)
-- [Pi RPC Mode](https://pi.dev/docs/latest/rpc)
-- [Pi JSON Event Stream Mode](https://pi.dev/docs/latest/json)
-- [Pi GitHub Repository](https://github.com/earendil-works/pi)
+- [Pi SDK](https://pi.dev/docs/latest/sdk) (`packages/coding-agent/src/core/sdk.ts:204`)
+- [Pi RPC Mode](https://pi.dev/docs/latest/rpc) (`packages/coding-agent/docs/rpc.md`, `packages/coding-agent/src/modes/rpc/rpc-mode.ts:53`)
+- [Pi JSON Event Stream Mode](https://pi.dev/docs/latest/json) (`packages/coding-agent/docs/json.md`)
+- [Pi GitHub Repository](https://github.com/earendil-works/pi-mono)
 
-真实 SDK 参考代码见 [sdk-example.ts](sdk-example.ts)。它按 2026-05-28 官方 SDK 文档整理，但不会被 `npm run check` type-check；写生产代码前要重新核验当前 quickstart、导出列表和函数签名。
+真实 SDK 参考代码见 [sdk-example.ts](sdk-example.ts)。它按 commit `dbb9911a` 官方 SDK 源码整理，但不会被 `npm run check` type-check；写生产代码前要重新核验当前 quickstart、导出列表和函数签名。
 
 ## 教学简化 vs 生产差异
 本章 mock 刻意做了很多简化。

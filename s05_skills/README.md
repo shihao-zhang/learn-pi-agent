@@ -183,22 +183,24 @@ node s05_skills/code.mjs
 
 ## 对应真实 Pi
 
-截至 2026-05-28，已核验的官方事实如下：
+> 事实基准:Pi monorepo commit `dbb9911a`(2026-05-30),npm `@earendil-works/pi-coding-agent@0.78.0`。以下 file:line 仅对该 commit 有效。
 
-- Pi Skills 是按需加载的自包含能力包，可以包含工作流、设置说明、脚本和参考资料。
-- Pi 会从全局、项目、package、settings、CLI `--skill` 等来源加载 skills。
-- 项目级来源包括 `.pi/skills/` 和 `.agents/skills/`；`.agents/skills/` 会沿 `cwd` 和父目录查找。
-- Pi 启动时扫描 skill 位置，提取 name 和 description，放入系统提示词 catalog。
-- 当任务匹配时，agent 会读取完整 `SKILL.md`；`/skill:name` 可以显式触发。
-- `SKILL.md` frontmatter 至少需要 `name` 和 `description`；`description` 缺失时不会加载。
-- 可选字段包括 `license`、`compatibility`、`metadata`、`allowed-tools`、`disable-model-invocation`。
-- 同名 skill 冲突时，Pi 会 warning，并保留第一个发现的 skill。
-- SDK 的 `createAgentSession()` 默认使用 `DefaultResourceLoader`；自定义 `ResourceLoader` 后，资源发现逻辑由你接管。
+截至 2026-05-30，已核验的官方事实如下：
+
+- Pi Skills 是按需加载的自包含能力包，可以包含工作流、设置说明、脚本和参考资料。(`packages/coding-agent/docs/skills.md:5`)
+- Pi 会从全局、项目、package、settings、CLI `--skill` 等来源加载 skills。(`packages/coding-agent/docs/skills.md:24-34`)
+- 项目级来源包括 `.pi/skills/` 和 `.agents/skills/`；`.agents/skills/` 会沿 `cwd` 和父目录查找。(`packages/coding-agent/docs/skills.md:29-39`)
+- Pi 启动时扫描 skill 位置，提取 name 和 description，放入系统提示词 catalog。(`packages/coding-agent/src/core/skills.ts:344-354`)
+- 当任务匹配时，agent 会读取完整 `SKILL.md`；`/skill:name` 可以显式触发。(`packages/coding-agent/docs/skills.md:75-82`)
+- `SKILL.md` frontmatter 至少需要 `name` 和 `description`；`description` 缺失时不会加载。(`packages/coding-agent/src/core/skills.ts:304-307`)
+- 可选字段包括 `license`、`compatibility`、`metadata`、`allowed-tools`、`disable-model-invocation`。(`packages/coding-agent/docs/skills.md:143-149`)
+- 同名 skill 冲突时，Pi 会 warning，并保留第一个发现的 skill。(`packages/coding-agent/src/core/skills.ts:410-424`)
+- SDK 的 `createAgentSession()` 默认使用 `DefaultResourceLoader`；自定义 `ResourceLoader` 后，资源发现逻辑由你接管。(`packages/coding-agent/src/core/sdk.ts:218`; `packages/coding-agent/src/core/resource-loader.ts:28`)
 
 官方入口：
 
-- [Pi Skills](https://pi.dev/docs/latest/skills)
-- [Pi SDK](https://pi.dev/docs/latest/sdk)
+- [Pi Skills](https://pi.dev/docs/latest/skills) (`packages/coding-agent/docs/skills.md`)
+- [Pi SDK](https://pi.dev/docs/latest/sdk) (`packages/coding-agent/src/core/sdk.ts`)
 
 ## 教学简化 vs 生产差异
 
