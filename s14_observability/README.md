@@ -125,6 +125,35 @@ await runWithPiContext(
 
 OTel 适配器可把它映射成 span attributes,Sentry 适配器映射成 context,自建可直接打 JSON 日志。
 
+## 真实 trace:一次 `--mode json` 的完整事件流
+
+本仓库抓了一条**真实** Pi JSON event stream(pi 0.78.0,deepseek provider),存档在
+[`.evidence/traces/raw-json-trace.jsonl`](../.evidence/traces/raw-json-trace.jsonl)(26 行原始)和
+[精简可读版](../.evidence/traces/json-trace-readme.md)。生成命令:
+
+```bash
+pi --provider deepseek --model deepseek-v4-flash --mode json --no-session -p "Reply with exactly: ok" </dev/null
+```
+
+> 真实经验:print 模式(`-p`)会读 stdin(支持管道输入),不重定向 `</dev/null` 会一直阻塞等输入。这是文档没强调、但实测踩到的点。
+
+事件序列骨架(message_update 已折叠):
+
+```text
+session → agent_start → turn_start
+  → message_start/message_end (user)
+  → message_start → [17× message_update: thinking_start/delta/end, text_start/delta/end] → message_end (assistant)
+  → turn_end → agent_end
+```
+
+这条真实 trace 逐字印证了多章声明:
+
+- 生命周期事件名与 s01/s06 一致;`message_update` 的流式子类型(`thinking_*` / `text_*`)与 s10 一致。
+- session header `{"type":"session","version":3,...}` —— 印证 s07/s13 的 **format v3**。
+- assistant 消息带 `api:"openai-completions"`、`provider:"deepseek"` —— 印证 s08:DeepSeek 走 OpenAI Completions API 形态。
+- 自然完成时 `stopReason:"stop"`(**不是** `no_tool_calls`)—— 印证 s01 的修正。
+- 真实 `usage`:`{input,output,cacheRead,cacheWrite,totalTokens,cost}`,`agent_end` 带 `willRetry:false` —— 这些正是 s14 说的"安全可观测字段"(token/cost 默认可入 trace)。
+
 ## 它和 CLI 的 JSON / RPC 模式什么关系
 
 s10 提到的 JSON event stream / RPC 模式,是这套可观测性思想的**对外进程形态**:把 agent 进度变成结构化事件输出给宿主进程。区别在于:

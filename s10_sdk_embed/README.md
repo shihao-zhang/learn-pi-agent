@@ -122,6 +122,8 @@ SDK 事件流和 CLI 的 JSON event stream 是同一类产品机制：把 agent 
 
 不要把 event stream 只当作“漂亮动画”。它是可观察性、调试、审计和集成测试的基础。
 
+> 真实样本:本仓库抓了一条真实的 `pi --mode json` 事件流存档在 [`.evidence/traces/raw-json-trace.jsonl`](../.evidence/traces/raw-json-trace.jsonl)(pi 0.78.0)。它正是上面四组事件的真实形态:`session → agent_start → turn_start → message_start/end → message_update(thinking/text 流式)→ turn_end → agent_end`。详细解读见 [s14 observability](../s14_observability/README.md#真实-trace一次---mode-json-的完整事件流)。
+
 ## 代码导读
 运行：
 
