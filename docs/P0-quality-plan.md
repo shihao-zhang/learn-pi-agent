@@ -1,7 +1,7 @@
 # learn-pi-agent 下一步质量提升计划 (P0)
 
 > 状态:待人类 review。基于对 Pi 源码 `dbb9911a`(2026-05-30,npm `@earendil-works/pi-coding-agent@0.78.0`)的第一手提取。
-> 证据资产:`.evidence/pi-evidence.json`(548 条 file:line 事实)。
+> 证据资产:`.evidence/pi-evidence.json`(13 模块、641 条 `fact` 条目,其中 135 条标记为 volatile/易过期)。
 
 ---
 

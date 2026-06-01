@@ -169,7 +169,7 @@ call -> registry -> activeTools -> schema -> permission -> handler -> result
 - Pi extension 可以通过 `pi.registerTool(definition)` 注册自定义工具（`packages/coding-agent/src/core/extensions/types.ts:1135`）。
 - extension 的 `tool_call` 事件可以在工具执行前检查或阻止调用（`packages/coding-agent/src/core/extensions/types.ts:818`）。
 - extension API 暴露 `pi.getActiveTools()`、`pi.getAllTools()`、`pi.setActiveTools(names)`（`packages/coding-agent/src/core/extensions/types.ts:1213`）。
-- SDK 中 `session.agent.state.tools` 表示当前 agent 可用工具集合。
+- 读取“当前工具集合”请用上面这组已核验 API（`pi.getActiveTools()` / `pi.getAllTools()`）；session/agent 内部状态对象的具体字段名未纳入本轮 `.evidence`,以官方 SDK 类型为准。
 
 资料入口：
 

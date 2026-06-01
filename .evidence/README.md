@@ -24,5 +24,5 @@
 
 ## 已知边界
 
-- `piHead` 字段内的值(`3c7e1a9f`)是任务启动时的占位 commit,**真实 checkout 是 `dbb9911a`**;以本文件为准。
+- `piHead` 字段已校正为真实 checkout `dbb9911a`(2026-05-30)。早期版本曾误填任务启动时的占位 commit `3c7e1a9f`;`pi-evidence.json` 正文里若仍有个别提取笔记提到 `3c7e1a9f`,一律以 `dbb9911a` 为准。
 - `notFound` 列出的是无法在该 checkout 定位的项,写章节时不得当作已确认事实。

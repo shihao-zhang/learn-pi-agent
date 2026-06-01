@@ -159,7 +159,7 @@ for (let turn = 1; turn <= maxTurns; turn += 1) {
 | 模型 | `scriptedModel`，固定剧本 | 真实 LLM，可能 streaming、重试、token 统计 |
 | 文件系统 | `Map` 模拟文件 | 真实磁盘、路径解析、权限、并发写入队列 |
 | 工具 schema | 只靠约定 | 需要参数 schema、校验、兼容处理 |
-| 权限 | `bash` 里硬编码阻止危险命令 | 通过权限系统、extension hook、用户确认、审计 |
+| 权限 | `bash` 里硬编码阻止危险命令 | 通过 extension 的 `tool_call` 门(单一 block)、用户确认、审计;Pi 没有独立的权限系统(见 s09) |
 | 工具执行 | 顺序执行 | 可能并行执行，需要处理结果顺序和文件冲突 |
 | 消息格式 | 简化为普通对象 | 真实 Pi 有 session、event、tool result 等更丰富类型 |
 | 停止条件 | 自然退出 + 教学版 `maxTurns` 上限 | 自然退出 + `stopReason` error/aborted + `shouldStopAfterTurn` hook;无内置 maxTurns。还有 abort、compaction、retry、queue mode、session 切换 |

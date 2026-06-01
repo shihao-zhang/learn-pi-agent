@@ -16,9 +16,9 @@ Pi 不只能作为终端命令使用。它也可以作为 agent harness，被嵌
 一句话：CLI 是 Pi 给人用的壳，SDK 是 Pi 给产品系统用的入口。
 
 ## 为什么上一章不够
-s09 讲权限，解决的是：工具执行前，harness 如何判断 `allow / ask / block`。
+s09 讲权限，解决的是：工具执行前，extension 的 `tool_call` 门要不要 `block`（单一布尔门，不是 allow/ask/block 三态；"ask" 是 `block` + `ctx.ui.select` 拼出来的自定义策略）。
 
-但权限只回答“能不能做”，不回答“谁创建这个 agent、资源从哪里来、事件怎么回到产品”。
+但这个门只回答“能不能做”，不回答“谁创建这个 agent、资源从哪里来、事件怎么回到产品”。
 
 如果你要把 Pi 嵌进一个 Web IDE，光有权限门还不够：
 - 用户点按钮后，你要创建或恢复一个 session。
@@ -67,7 +67,7 @@ flowchart TD
   Create --> Session["AgentSession"]
   Loader["ResourceLoader\nskills / prompts / context / extensions"] --> Create
   Storage["AuthStorage + ModelRegistry\nAPI key / model lookup"] --> Create
-  Manager["SessionManager\ncreate / resume / in-memory"] --> Create
+  Manager["SessionManager\n会话持久化 / 恢复"] --> Create
   Tools["customTools\nschema + execute"] --> Create
   App --> Prompt["session.prompt(user input)"]
   Prompt --> Session
@@ -151,7 +151,7 @@ node s10_sdk_embed/code.mjs
 
 截至 commit `dbb9911a`，本章按官方 Pi 源码核验：
 - Pi 官方 SDK 包含在 `@earendil-works/pi-coding-agent` 主包中。(`packages/coding-agent/src/index.ts:165`)
-- 官方快速开始使用 `AuthStorage`、`ModelRegistry`、`SessionManager` 和 `createAgentSession()`。
+- `createAgentSession()` 接受的全部选项都是可选的:`cwd`、`authStorage`、`modelRegistry`、`resourceLoader`、`sessionManager`、`settingsManager`、`tools`、`customTools` 等(`CreateAgentSessionOptions`)。不传这些依赖时由 SDK 用默认值组装。注意:`AuthStorage` / `ModelRegistry` / `SessionManager` 是这些选项的**类型**,其真实构造工厂(如 model registry 的 `createModelRegistry` / `buildModelRegistry`)不是 `Xxx.create()` 形式——以 `.evidence` 的签名为准。(`packages/coding-agent/src/core/sdk.ts` 的 `CreateAgentSessionOptions`)
 - `createAgentSession()` 是创建单个 `AgentSession` 的主要工厂函数；返回 `{ session, extensionsResult, modelFallbackMessage? }`。(`packages/coding-agent/src/core/sdk.ts:204`, `packages/coding-agent/src/core/sdk.ts:86`)
 - 如果不传自定义 `ResourceLoader`，会自动构造 `DefaultResourceLoader` 并 `await reload()`。(`packages/coding-agent/src/core/sdk.ts:218`)
 - `AgentSession` 暴露 `prompt()`、`steer()`、`followUp()`、`subscribe()`、`setModel()`、`compact()`、`abort()`、`dispose()` 等能力。(`packages/coding-agent/src/core/agent-session.ts:254`)
@@ -212,8 +212,8 @@ node s10_sdk_embed/code.mjs
 - `DefaultResourceLoader` 的导入路径是否变化。
 - `ResourceLoader` 当前需要实现哪些方法，`reload()` 语义和错误处理是否变化。
 - `customTools` 与 `defineTool()` 的 schema 写法是否变化。
-- `SessionManager.inMemory()`、`SessionManager.create()` 的签名是否变化。
-- `AuthStorage.create()` 与 `ModelRegistry.create()` 的默认路径是否变化。
+- `SessionManager` 的工厂(`.evidence` 确认有 `SessionManager.continueRecent`;其余 in-memory/继续会话等工厂的名字与签名)是否变化。
+- model registry 的真实工厂(`createModelRegistry` / `buildModelRegistry` / `getModelRegistry`,**不是** `ModelRegistry.create`)与 `AuthStorage` 的构造方式是否变化。
 - session replacement 是否仍由 `AgentSessionRuntime` 负责。
 - RPC mode 和 JSON event stream mode 的命令、事件和 JSONL framing 是否变化。
 - 你的产品是否需要进程隔离；如果需要，SDK 可能不是最佳入口。

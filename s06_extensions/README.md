@@ -229,7 +229,7 @@ node s06_extensions/code.mjs
 - `session_start`/`session_shutdown` 的 reason 取值:`startup|reload|new|resume|fork`(`types.ts:516`)。
 - 拥有 typed `tool_call`/`tool_result` 的内置工具:`bash, read, edit, write, grep, find, ls`(`types.ts:824`);用 `isToolCallEventType` 收窄类型。
 - 可导入的包:`@earendil-works/pi-coding-agent`、`-agent-core`、`-tui`、`-ai`,加 `typebox`(`extensions/loader.ts:96`);旧 `@mariozechner/*` 别名仍解析。
-- `ctx.hasUI` 在 print(`-p`)/JSON 模式为 `false`,interactive/RPC 为 `true`;非交互模式下确认类 UI 需降级(`extensions.md:865`)。
+- `ctx.hasUI` 表示是否有可交互 UI:print(`-p`)/RPC 等非交互模式为 `false`,仅交互式 TUI 为 `true`;非交互模式下确认类 UI 需降级(源码注释逐字:`Whether UI is available (false in print/RPC mode)`,`extensions/types.ts`;另见 `extensions.md:865`)。
 
 官方入口:[Pi Extensions](https://pi.dev/docs/latest/extensions) · 源码 [`extensions.md`](https://github.com/earendil-works/pi-mono/blob/main/packages/coding-agent/docs/extensions.md) · [`extensions/types.ts`](https://github.com/earendil-works/pi-mono/blob/main/packages/coding-agent/src/core/extensions/types.ts)
 

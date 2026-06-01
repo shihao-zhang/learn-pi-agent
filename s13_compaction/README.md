@@ -2,6 +2,8 @@
 
 > 事实基准:Pi monorepo commit `dbb9911a`(2026-05-30),npm `@earendil-works/pi-coding-agent@0.78.0`。
 > 以下 `file:line` 仅对该 commit 有效;易过期点见末尾"事实核验清单"。
+>
+> 来源说明:本章事实主要来自官方文档 `packages/coding-agent/docs/compaction.md`,**未**纳入 `.evidence/pi-evidence.json` 的 13 个源码提取模块。触发阈值、默认值、切点规则等以 `compaction.md` 为准;若要核到源码级,需另读 `packages/coding-agent/src/core/compaction/`。
 
 ## 本章要解决的问题
 

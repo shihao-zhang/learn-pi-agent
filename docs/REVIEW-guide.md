@@ -233,7 +233,8 @@ Claude 的结论**必须**由主 agent 逐条复核，不能未经本地验证�
 | 易过期点 | 说明 |
 |---|---|
 | `version` 字段 | 真实 trace 显示当前为 `3`，未来可能升级 |
-| Entry 类型 | `session`、`agent_start`、`turn_start` 等事件名可能重命名 |
+| Session entry 类型 | session 文件里的条目类型（如 `message`、`model_change`、`compaction` 等）可能增减或重命名 |
+| 生命周期事件名 | event stream 上的事件（如 `agent_start`、`turn_start`、`tool_execution_end`）可能重命名——注意这是运行时事件，与上一行的 session entry 类型是两套概念，不要混用 |
 | fork/clone/compact 语义 | 文档描述的用户体验层；内部实现可能变化 |
 
 ### Skills / Prompt Templates / Packages

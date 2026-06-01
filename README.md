@@ -98,7 +98,7 @@ Pi is a monorepo with three cleanly separated layers (verified per-package again
 │      Harness runtime:                                         │
 │        · bare agent loop   (agent-loop.ts)                    │
 │        · AgentHarness orchestration (harness/agent-harness.ts)│
-│          phase / turn snapshot / save point / queue / durable │
+│          (orchestration only; internals not yet in .evidence)│
 ├─────────────────────────────────────────────────────────────┤
 │  L1  pi-ai            (packages/ai)                           │
 │      Unified multi-provider LLM API: 30+ providers / OAuth / │
@@ -109,7 +109,7 @@ Pi is a monorepo with three cleanly separated layers (verified per-package again
 | Layer | Package | Responsibility | Not responsible for |
 |---|---|---|---|
 | **L1 pi-ai** | `packages/ai` | Normalize wire protocols, auth, and model compat flags across providers into a single API | Knows nothing about "tools", "sessions", or "skills" |
-| **L2 pi-agent-core** | `packages/agent` | Run the agent loop; `AgentHarness` manages turn snapshots, save points, steer/followUp queues, durable state | Does not implement `read`/`bash`; does not manage TUI |
+| **L2 pi-agent-core** | `packages/agent` | Run the agent loop; `AgentHarness` (`harness/agent-harness.ts`) adds an orchestration layer on top — its internals (turn/queue/durable-state handling) were **not** extracted into `.evidence` this pass, so treat field-level claims as unverified | Does not implement `read`/`bash`; does not manage TUI |
 | **L3 pi-coding-agent** | `packages/coding-agent` | Wraps L2 into a usable terminal coding agent: built-in tools, resource discovery, extensions, permission gate, compaction, session UI | Does not reimplement the loop; loop lives in L2 |
 
 > Where your task lands determines which chapters and code you should read:
