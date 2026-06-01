@@ -190,6 +190,8 @@ learn-pi-agent/
     extensions/
   docs/
     research-notes.md       # 资料核验与阅读顺序
+    REVIEW-guide.md         # review 指南
+    fact-maintenance.md     # 事实更新机制
   scripts/
     check-links.mjs         # 轻量自检
 ```
@@ -209,6 +211,14 @@ learn-pi-agent/
 ## 资料来源
 
 核心资料见 [docs/research-notes.md](docs/research-notes.md)。优先级按“官方文档 > 官方仓库 > 官方新闻 > 第三方拆解 > 社区案例”排序。
+
+带 `file:line` 的第一手事实清单见 [.evidence/](.evidence/README.md)(由真实 Pi 源码提取),真实运行 trace 见 [.evidence/traces/](.evidence/traces/)。
+
+## 贡献与维护
+
+- [CONTRIBUTING.md](CONTRIBUTING.md):章节结构约定、事实纪律、提交前检查。
+- [docs/REVIEW-guide.md](docs/REVIEW-guide.md):如何 review 本仓库内容、如何复核 file:line 与真实 trace。
+- [docs/fact-maintenance.md](docs/fact-maintenance.md):Pi 更新后事实怎么复检、谁来更、怎么更。
 
 本仓库创建时使用了附件 `pi-agent-harness-学习指南.md` 作为起点，但所有容易过期的事实都重新核验过，尤其是包名和仓库迁移。
 
