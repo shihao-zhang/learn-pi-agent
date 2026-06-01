@@ -49,7 +49,7 @@ s01 的重点是解释 agent loop，所以它故意把工具部分讲得很轻�
 | `name` | 给模型和 registry 使用的稳定 ID | 不写业务逻辑 |
 | `description` | 告诉模型什么时候该用这个工具 | 不承担权限控制 |
 | `parameters` | 描述输入 schema，并做基础校验 | 不读取真实文件或网络 |
-| `permission` | 决定 allow、ask、block | 不直接执行业务动作 |
+| `permission` | 决定是否拦截:本章 mock 用 `allow`/`block` 两态;真实 Pi 是单一 `block` 门(详见下文与 s09) | 不直接执行业务动作 |
 | `handler` | 执行真实动作并返回结果 | 不决定自己是否可见 |
 
 ### 1. Registry：工具注册表
@@ -85,9 +85,7 @@ permission 还要回答“这次具体调用是否允许”。
 
 例如 `write` 工具可能在编辑模式中是 active 的，但具体写入 `.env` 时仍应被拦住。
 
-权限层常见结果是 `allow`、`ask`、`block`。
-本章 demo 为了无依赖、可直接运行，只实现 `allow` 和 `block`。
-后续 s09 会更集中地讲权限策略。
+Pi 真实的权限决策只有一个布尔门：`tool_call` 事件处理器返回 `{ block?: boolean; reason?: string }`（`packages/coding-agent/src/core/extensions/types.ts:986`）；`allow`/`ask`/`block` 三态是教学类比，不是源码枚举——`ask` 需要在处理器内自行通过 `ctx.ui.select` 实现。本章 demo 只模拟 `allow` 和 `block` 两种结果。后续 s09 会更集中地讲权限策略。
 
 ### 5. Unified Result：统一返回结构
 
@@ -163,17 +161,19 @@ call -> registry -> activeTools -> schema -> permission -> handler -> result
 
 ## 对应真实 Pi
 
+> 事实基准:Pi monorepo `dbb9911a`(2026-05-30),npm `@earendil-works/pi-coding-agent@0.78.0`。以下 file:line 仅对该 commit 有效。
+
 以下事实已按官方资料核验：
 
-- Pi 默认给模型 `read`、`write`、`edit`、`bash` 四个工具；`grep`、`find`、`ls` 等只读工具可通过 tool options 启用。
-- Pi extension 可以通过 `pi.registerTool(definition)` 注册自定义工具。
-- extension 的 `tool_call` 事件可以在工具执行前检查或阻止调用。
-- extension API 暴露 `pi.getActiveTools()`、`pi.getAllTools()`、`pi.setActiveTools(names)`。
-- SDK 中 `session.agent.state.tools` 表示当前 agent 可用工具集合。
+- Pi 内置恰好七个工具：`read`、`bash`、`edit`、`write`、`grep`、`find`、`ls`（`packages/coding-agent/src/core/tools/index.ts:83`）。默认激活的只有四个：`read`、`bash`、`edit`、`write`；`grep`、`find`、`ls` 默认关闭，可通过 `--tools` 启用（`packages/coding-agent/src/core/agent-session.ts:2400-2402`，`packages/coding-agent/src/cli/args.ts:376-378`）。
+- Pi extension 可以通过 `pi.registerTool(definition)` 注册自定义工具（`packages/coding-agent/src/core/extensions/types.ts:1135`）。
+- extension 的 `tool_call` 事件可以在工具执行前检查或阻止调用（`packages/coding-agent/src/core/extensions/types.ts:818`）。
+- extension API 暴露 `pi.getActiveTools()`、`pi.getAllTools()`、`pi.setActiveTools(names)`（`packages/coding-agent/src/core/extensions/types.ts:1213`）。
+- 读取“当前工具集合”请用上面这组已核验 API（`pi.getActiveTools()` / `pi.getAllTools()`）；session/agent 内部状态对象的具体字段名未纳入本轮 `.evidence`,以官方 SDK 类型为准。
 
 资料入口：
 
-- [Pi Quickstart](https://pi.dev/docs/latest/quickstart)
+- [Pi Quickstart](https://pi.dev/docs/latest/quickstart) (`packages/coding-agent/docs/quickstart.md:77-84`)
 - [Pi Extensions](https://pi.dev/docs/latest/extensions)
 - [Pi SDK](https://pi.dev/docs/latest/sdk)
 
@@ -207,7 +207,7 @@ tool dispatch 是其中连接“模型意图”和“真实操作”的关键机
 
 写或改这一章时，请逐项检查：
 
-- 是否仍然只声称 Pi 默认工具为 `read`、`write`、`edit`、`bash`？
+- 是否声明 Pi 内置七个工具，默认激活四个（`read`、`bash`、`edit`、`write`），`grep`/`find`/`ls` 默认关闭？（来源：`packages/coding-agent/src/core/tools/index.ts:83`，`packages/coding-agent/src/core/agent-session.ts:2400-2402`）
 - 如果提到 `grep`、`find`、`ls`，是否说清它们是额外可启用的只读工具？
 - 是否把 custom tool 的入口写成 `pi.registerTool(...)`？
 - 是否把 extension 位置写成 `~/.pi/agent/extensions/` 或 `.pi/extensions/` 时，再次核验官方文档？

@@ -176,20 +176,22 @@ Package source normalization：
 
 ## 对应真实 Pi
 
-截至 2026-05-28，本章按官方资料核验：
+> 事实基准:Pi monorepo commit `dbb9911a`(2026-05-30),npm `@earendil-works/pi-coding-agent@0.78.0`。以下 file:line 仅对该 commit 有效。
+
+截至 2026-05-30，本章按官方资料核验：
 - Pi 官方文档把 Pi 描述为 minimal terminal coding harness，可通过 TypeScript extensions、skills、prompt templates、themes、packages 扩展。
 - 当前 CLI 包名是 `@earendil-works/pi-coding-agent`。
-- Pi package 可以通过 `package.json` 的 `pi` 字段声明 `extensions`、`skills`、`prompts`、`themes`。
-- package 也可以靠约定目录发现资源。
-- 官方 install 示例覆盖 npm、git、raw GitHub URL、本地绝对路径、本地相对路径。
-- 官方安全提醒明确指出 package 里的 extension 会以用户系统权限运行，第三方 package 安装前要 review。
-- runtime dependencies 应放在 `dependencies`。
-- Pi 核心包和 `typebox` 应作为 `peerDependencies`，不要 bundle。
-- package gallery 使用 `pi-package` keyword 做发现信号。
+- Pi package 可以通过 `package.json` 的 `pi` 字段声明 `extensions`、`skills`、`prompts`、`themes`。(`packages/coding-agent/docs/packages.md§Creating a Pi Package`)
+- package 也可以靠约定目录发现资源。(`packages/coding-agent/docs/packages.md§Convention Directories`)
+- 官方 install 示例覆盖 npm、git、raw GitHub URL、本地绝对路径、本地相对路径。(`packages/coding-agent/docs/packages.md§Install and Manage`)
+- 官方安全提醒明确指出 package 里的 extension 会以用户系统权限运行，第三方 package 安装前要 review。(`packages/coding-agent/docs/packages.md§Install and Manage`)
+- runtime dependencies 应放在 `dependencies`。(`packages/coding-agent/docs/packages.md§Dependencies`)
+- Pi 核心包和 `typebox` 应作为 `peerDependencies`，不要 bundle。(`packages/coding-agent/docs/packages.md§Dependencies`)
+- package gallery 使用 `pi-package` keyword 做发现信号。(`packages/coding-agent/docs/packages.md§Gallery Metadata`)
 
 参考资料：
 - [Pi Documentation](https://pi.dev/docs/latest)
-- [Pi Packages](https://github.com/earendil-works/pi/blob/main/packages/coding-agent/docs/packages.md)
+- [Pi Packages](https://github.com/earendil-works/pi-mono/blob/main/packages/coding-agent/docs/packages.md) (`packages/coding-agent/docs/packages.md`)
 - [Pi Extensions](https://pi.dev/docs/latest/extensions)
 - [Pi Has a New Home at Earendil](https://pi.dev/news/2026/5/7/pi-has-a-new-home)
 
@@ -230,7 +232,7 @@ Package source normalization：
 
 ## 事实核验清单
 
-- 当前官方仓库是否仍是 `earendil-works/pi`。
+- 当前官方仓库是否仍是 `earendil-works/pi-mono`（`/pi` 为别名，canonical 仓库是 `pi-mono`）。
 - 当前 CLI 包名是否仍是 `@earendil-works/pi-coding-agent`。
 - `pi` manifest 支持的资源键是否仍是 `extensions / skills / prompts / themes`。
 - 约定目录发现规则是否变化。

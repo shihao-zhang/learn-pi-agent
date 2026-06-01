@@ -133,13 +133,15 @@ node s12_comprehensive/code.mjs
 - 被 block 的工具调用不是异常崩溃，而是稳定 tool result。
 - session entry 和 trace event 分开保存。
 ## 对应真实 Pi
-截至 2026-05-28，下面这些是本章映射到真实 Pi 的公开机制依据。
+> 事实基准:Pi monorepo commit `dbb9911a`(2026-05-30),npm `@earendil-works/pi-coding-agent@0.78.0`。以下 file:line 仅对该 commit 有效。
+
+截至 2026-05-30，下面这些是本章映射到真实 Pi 的公开机制依据。
 - Pi 官方文档把 Pi 定位为 minimal terminal coding harness，并说明核心保持小，通过 TypeScript extensions、skills、prompt templates、themes、packages 扩展：[Pi Documentation](https://pi.dev/docs/latest)。
-- SDK 文档说明 `createAgentSession()` 会使用 `ResourceLoader` 供应 extensions、skills、prompt templates、themes 和 context files；默认使用 `DefaultResourceLoader`：[Pi SDK](https://pi.dev/docs/latest/sdk)。
-- SDK 文档列出内置工具名，默认内置工具包括 `read`、`bash`、`edit`、`write`，也可选择 `grep`、`find`、`ls`：[Pi SDK Tools](https://pi.dev/docs/latest/sdk)。
-- Extension 文档说明扩展可订阅事件、注册工具、注册命令，并通过 `tool_call` 这类工具事件在执行前介入：[Pi Extensions](https://pi.dev/docs/latest/extensions)。
-- Session format 文档说明 session 是 JSONL，entry 通过 `id` / `parentId` 形成 tree，用于 in-place branching：[Pi Session Format](https://pi.dev/docs/latest/session-format)。
-- Package 文档说明 Pi packages 可以声明 extensions、skills、prompt templates、themes，用于 npm、git 或本地资源分发：[Pi Packages](https://pi.dev/docs/latest/packages)。
+- SDK 文档说明 `createAgentSession()` 会使用 `ResourceLoader` 供应 extensions、skills、prompt templates、themes 和 context files；默认使用 `DefaultResourceLoader`：[Pi SDK](https://pi.dev/docs/latest/sdk)（`packages/coding-agent/src/core/sdk.ts:204`、`packages/coding-agent/src/core/resource-loader.ts:28`、`packages/coding-agent/src/core/resource-loader.ts:152`）。
+- SDK 文档列出内置工具名，默认内置工具包括 `read`、`bash`、`edit`、`write`，也可选择 `grep`、`find`、`ls`：[Pi SDK Tools](https://pi.dev/docs/latest/sdk)（`packages/coding-agent/src/core/tools/index.ts:83`、`packages/coding-agent/src/core/sdk.ts:282`）。
+- Extension 文档说明扩展可订阅事件、注册工具、注册命令，并通过 `tool_call` 这类工具事件在执行前介入：[Pi Extensions](https://pi.dev/docs/latest/extensions)（`packages/coding-agent/src/core/extensions/types.ts:818`、`packages/coding-agent/src/core/extensions/types.ts:1135`）。
+- Session format 文档说明 session 是 JSONL，entry 通过 `id` / `parentId` 形成 tree，用于 in-place branching：[Pi Session Format](https://pi.dev/docs/latest/session-format)（`packages/coding-agent/docs/session-format.md:3`、`packages/coding-agent/src/core/session-manager.ts:138-147`）。
+- Package 文档说明 Pi packages 可以声明 extensions、skills、prompt templates、themes，用于 npm、git 或本地资源分发：[Pi Packages](https://pi.dev/docs/latest/packages)（`packages/coding-agent/docs/packages.md§Creating a Pi Package`、`packages/coding-agent/docs/packages.md§Package Sources`）。
 这些依据只支持“机制对应”。
 它们不支持我们宣称本章代码就是 Pi 源码、内部类名、真实执行顺序或完整协议。
 ## 教学简化 vs 生产差异

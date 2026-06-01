@@ -326,7 +326,8 @@ harness.onToolCall(async (call) => {
       source: "protect-dangerous mock extension",
     };
   }
-  return { allow: true };
+  // 真实 Pi 是单一 block 门:不阻止就返回 undefined(没有 allow/ask 这种返回值)。
+  return undefined;
 });
 
 const result = await harness.runTurn("把前 11 章汇总成一个完整 mock harness。");

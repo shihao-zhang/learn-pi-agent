@@ -8,9 +8,9 @@
 
 Pi 是一个极简终端 coding agent harness。它的核心不是“把智能写进流程图”，而是给已经具备 coding agency 的模型提供足够清楚的工作环境：少量工具、可观察上下文、可热加载扩展、可保存会话、可嵌入运行时。
 
-截至 2026-05-28 已核验的官方事实：
+截至 2026-05-30（Pi monorepo commit `dbb9911a`，npm `@earendil-works/pi-coding-agent@0.78.0`）已核验的官方事实：
 
-- 官方仓库是 [earendil-works/pi](https://github.com/earendil-works/pi)。
+- 官方仓库规范名是 [earendil-works/pi-mono](https://github.com/earendil-works/pi-mono)（`earendil-works/pi` 是别名，二者都可访问）。
 - 官方文档入口是 [pi.dev/docs/latest](https://pi.dev/docs/latest)。
 - CLI 包名已迁移到 `@earendil-works/pi-coding-agent`，旧的 `@mariozechner/*` 包从 `0.74.0` 起进入旧 scope 过渡期。
 - 默认工具是 `read`、`write`、`edit`、`bash`；`grep`、`find`、`ls` 是可启用的内置只读工具。
@@ -80,12 +80,15 @@ Pi 的“极简”不是没有工程，而是把工程集中在几个关键位�
 - 扩展靠边挂：复杂能力通过 extension / package 加进来，不污染主循环。
 - 会话可追踪：session tree 保留分支和历史，便于回退与复盘。
 
-## 12 章递进课程
+## 递进课程：00 机制地图 + s01–s14
 
 > 目标：从一个最小 loop，走到能解释 Pi 真实产品结构的教学 harness。
 
+> 先读 [00 机制地图](00_map/README.md):它讲清 Pi 的三层架构、四条横切线,并给出 AI 产品经理 / 平台设计者 / 工程读者三条跳读路径。**章号是顺序,机制地图才是结构。**
+
 | 章节 | 主题 | 一句话 |
 |---|---|---|
+| [00](00_map/README.md) | 机制地图 | 三层架构 + 横切线 + 三条读者路径(建议先读) |
 | [s01](s01_agent_loop/README.md) | Agent Loop | 一个循环 + 四个工具，是 Pi 的最小心脏 |
 | [s02](s02_tool_dispatch/README.md) | Tool Dispatch | 加工具时改 registry，不改 loop |
 | [s03](s03_context_files/README.md) | Context Files | AGENTS.md 是项目知识的入口，不是万能 prompt |
@@ -98,6 +101,8 @@ Pi 的“极简”不是没有工程，而是把工程集中在几个关键位�
 | [s10](s10_sdk_embed/README.md) | SDK Embed | Pi 可以作为引擎嵌进自己的应用 |
 | [s11](s11_packages/README.md) | Pi Packages | 把 prompts、skills、extensions、themes 打包分发 |
 | [s12](s12_comprehensive/README.md) | Comprehensive | 所有机制回到一个可解释的 harness |
+| [s13](s13_compaction/README.md) | Compaction | 上下文经济学:旧消息换成结构化摘要 |
+| [s14](s14_observability/README.md) | Observability | 把 agent 进度变成 trace 树,默认脱敏 |
 
 ## 如何阅读每章
 
@@ -121,6 +126,7 @@ Pi 的“极简”不是没有工程，而是把工程集中在几个关键位�
 | 状态与模型 | s07-s08 | 理解 session tree、分支、模型切换、多 provider adapter 的产品复杂度 |
 | 边界控制 | s09 | 把权限看成 harness gate，而不是一句“请小心”的 prompt |
 | 产品化 | s10-s12 | 理解 SDK embedding、package 分发，以及如何把前面机制组装回一个完整 harness |
+| 上下文与可观察 | s13-s14 | 理解 compaction 的上下文经济学，以及把 agent 进度变成可脱敏的 trace 树 |
 
 ## 快速开始
 
@@ -164,6 +170,7 @@ flowchart LR
   C --> D["阶段 4: 会保存和切换\ns07-s08 sessions / models"]
   D --> E["阶段 5: 会控风险\ns09 permissions"]
   E --> F["阶段 6: 会产品化\ns10-s12 SDK / packages / comprehensive"]
+  F --> G["阶段 7: 省上下文 + 可观察\ns13-s14 compaction / observability"]
 ```
 
 ## 项目结构
@@ -172,6 +179,9 @@ flowchart LR
 learn-pi-agent/
   README-zh.md              # 中文总纲
   README.md                 # English brief
+  CONTRIBUTING.md           # 章节结构约定、事实纪律、提交前检查
+  00_map/                   # 机制地图（先读）：三层架构 + 横切线 + 读者路径
+    README.md
   s01_agent_loop/           # 每章一个独立主题
     README.md
     code.mjs
@@ -179,14 +189,26 @@ learn-pi-agent/
   s12_comprehensive/
     README.md
     code.mjs
+  s13_compaction/           # 上下文经济学：旧消息换结构化摘要
+    README.md
+    code.mjs
+  s14_observability/        # trace 树 + 默认脱敏
+    README.md
+    code.mjs
+  .evidence/                # 第一手证据：带 file:line 的事实清单 + 真实 trace
+    README.md
+    pi-evidence.json
+    traces/
   .pi/                      # 可被真实 Pi 加载的项目级资源样例
     prompts/
     skills/
     extensions/
   docs/
     research-notes.md       # 资料核验与阅读顺序
+    REVIEW-guide.md         # review 指南
+    fact-maintenance.md     # 事实更新机制
   scripts/
-    check-links.mjs         # 轻量自检
+    check-links.mjs         # 轻量自检（含 trace 资产 + 可选外链存活）
 ```
 
 ## 范围说明
@@ -204,6 +226,14 @@ learn-pi-agent/
 ## 资料来源
 
 核心资料见 [docs/research-notes.md](docs/research-notes.md)。优先级按“官方文档 > 官方仓库 > 官方新闻 > 第三方拆解 > 社区案例”排序。
+
+带 `file:line` 的第一手事实清单见 [.evidence/](.evidence/README.md)(由真实 Pi 源码提取),真实运行 trace 见 [.evidence/traces/](.evidence/traces/)。
+
+## 贡献与维护
+
+- [CONTRIBUTING.md](CONTRIBUTING.md):章节结构约定、事实纪律、提交前检查。
+- [docs/REVIEW-guide.md](docs/REVIEW-guide.md):如何 review 本仓库内容、如何复核 file:line 与真实 trace。
+- [docs/fact-maintenance.md](docs/fact-maintenance.md):Pi 更新后事实怎么复检、谁来更、怎么更。
 
 本仓库创建时使用了附件 `pi-agent-harness-学习指南.md` 作为起点，但所有容易过期的事实都重新核验过，尤其是包名和仓库迁移。
 

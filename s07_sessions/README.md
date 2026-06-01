@@ -176,34 +176,36 @@ node s07_sessions/code.mjs
 
 ## 对应真实 Pi
 
-截至 2026-05-28，本章按官方 Pi 文档核验：
+> 事实基准:Pi monorepo commit `dbb9911a`(2026-05-30),npm `@earendil-works/pi-coding-agent@0.78.0`。以下 file:line 仅对该 commit 有效。
+
+截至 2026-05-30，本章按官方 Pi 文档核验：
 - Pi 会把 conversation 保存为 sessions，用于继续工作、从早期回合分支、回看旧路径。
 - Session 默认保存到 `~/.pi/agent/sessions/`，并按工作目录组织。
-- Session 文件是 JSONL。
-- Session entry 通过 `id` / `parentId` 形成树结构。
-- 当前工作点被称为 active leaf。
-- `/resume` 用于选择并恢复旧 session。
-- `/new` 用于开始新 session。
-- `/tree` 用于在当前 session tree 中导航。
-- `/fork` 用于从之前的 user message 创建新 session。
-- `/clone` 用于把当前 active branch 复制成新 session。
-- Session format 文档列出了 `message`、`model_change`、`compaction`、`branch_summary` 等 entry；完整 entry 枚举和字段以官方文档当前版本为准。
-- SessionManager API 包括 `create`、`open`、`continueRecent`、`list`、`appendMessage`、`appendModelChange`、`branch`、`getBranch`、`buildSessionContext` 等方法。
+- Session 文件是 JSONL。(packages/coding-agent/docs/session-format.md:3)
+- Session entry 通过 `id` / `parentId` 形成树结构。(packages/coding-agent/src/core/session-manager.ts:731)
+- 当前工作点被称为 active leaf。(packages/coding-agent/src/core/session-manager.ts:731)
+- `/resume` 用于选择并恢复旧 session。(packages/coding-agent/src/core/slash-commands.ts:37)
+- `/new` 用于开始新 session。(packages/coding-agent/src/core/slash-commands.ts:35)
+- `/tree` 用于在当前 session tree 中导航。(packages/coding-agent/src/core/slash-commands.ts:32)
+- `/fork` 用于从之前的 user message 创建新 session。(packages/coding-agent/src/core/slash-commands.ts:30)
+- `/clone` 用于把当前 active branch 复制成新 session。(packages/coding-agent/src/core/slash-commands.ts:31)
+- Session format 文档列出的完整 entry union 为 `message`、`thinking_level_change`、`model_change`、`compaction`、`branch_summary`、`custom`、`custom_message`、`label`、`session_info` 9 种；当前 format 版本为 v3。(packages/coding-agent/src/core/session-manager.ts:138-147, :28)
+- SessionManager API 包括 `create`、`open`、`continueRecent`、`list`、`appendMessage`、`appendModelChange`、`branch`、`getBranch`、`buildSessionContext`、`branchWithSummary`、`createBranchedSession`、`forkFrom` 等方法。(packages/coding-agent/src/core/session-manager.ts:1363, :1374, :1390, :1219, :1128, :1143, :1240, :1264, :1412)
 
 参考：
-- [Pi Sessions](https://pi.dev/docs/latest/sessions)
-- [Pi Session File Format](https://pi.dev/docs/latest/session-format)
+- [Pi Sessions](https://pi.dev/docs/latest/sessions) (packages/coding-agent/docs/sessions.md)
+- [Pi Session File Format](https://pi.dev/docs/latest/session-format) (packages/coding-agent/docs/session-format.md:3)
 
 ## 教学简化 vs 生产差异
 
 本章代码是教学 mock，不是 Pi 源码复制。
 
 主要简化：
-- id 用 `e001` 这种递增字符串，真实 Pi 文档示例是短十六进制 id。
+- id 用 `e001` 这种递增字符串，真实 Pi 的 entry id 是 8 位十六进制（`randomUUID().slice(0,8)`），session id 是 uuidv7。(packages/coding-agent/src/core/session-manager.ts:213-221, :201-203)
 - timestamp 是确定性时间，方便教材输出稳定。
 - 只实现少量 entry 类型。
 - message content 简化为字符串。
-- `buildContext()` 没有完整处理工具调用、图片、thinking、usage、cost。
+- `buildContext()` 没有完整处理工具调用、图片、thinking、usage、cost；真实 `buildSessionContext` 还会处理 compaction 的 `firstKeptEntryId` 截断逻辑。(packages/coding-agent/src/core/session-manager.ts:380-421)
 - `branch_summary` 只转成一条教学消息。
 - `cloneActiveBranch()` 只复制 active branch，不处理真实文件路径、权限和 session picker。
 - `fromJSONL()` 默认把最后一条 entry 当 leaf。
