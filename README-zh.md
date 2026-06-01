@@ -8,9 +8,9 @@
 
 Pi 是一个极简终端 coding agent harness。它的核心不是“把智能写进流程图”，而是给已经具备 coding agency 的模型提供足够清楚的工作环境：少量工具、可观察上下文、可热加载扩展、可保存会话、可嵌入运行时。
 
-截至 2026-05-28 已核验的官方事实：
+截至 2026-05-30（Pi monorepo commit `dbb9911a`，npm `@earendil-works/pi-coding-agent@0.78.0`）已核验的官方事实：
 
-- 官方仓库是 [earendil-works/pi](https://github.com/earendil-works/pi)。
+- 官方仓库规范名是 [earendil-works/pi-mono](https://github.com/earendil-works/pi-mono)（`earendil-works/pi` 是别名，二者都可访问）。
 - 官方文档入口是 [pi.dev/docs/latest](https://pi.dev/docs/latest)。
 - CLI 包名已迁移到 `@earendil-works/pi-coding-agent`，旧的 `@mariozechner/*` 包从 `0.74.0` 起进入旧 scope 过渡期。
 - 默认工具是 `read`、`write`、`edit`、`bash`；`grep`、`find`、`ls` 是可启用的内置只读工具。
@@ -80,7 +80,7 @@ Pi 的“极简”不是没有工程，而是把工程集中在几个关键位�
 - 扩展靠边挂：复杂能力通过 extension / package 加进来，不污染主循环。
 - 会话可追踪：session tree 保留分支和历史，便于回退与复盘。
 
-## 12 章递进课程
+## 递进课程：00 机制地图 + s01–s14
 
 > 目标：从一个最小 loop，走到能解释 Pi 真实产品结构的教学 harness。
 
@@ -126,6 +126,7 @@ Pi 的“极简”不是没有工程，而是把工程集中在几个关键位�
 | 状态与模型 | s07-s08 | 理解 session tree、分支、模型切换、多 provider adapter 的产品复杂度 |
 | 边界控制 | s09 | 把权限看成 harness gate，而不是一句“请小心”的 prompt |
 | 产品化 | s10-s12 | 理解 SDK embedding、package 分发，以及如何把前面机制组装回一个完整 harness |
+| 上下文与可观察 | s13-s14 | 理解 compaction 的上下文经济学，以及把 agent 进度变成可脱敏的 trace 树 |
 
 ## 快速开始
 
@@ -169,6 +170,7 @@ flowchart LR
   C --> D["阶段 4: 会保存和切换\ns07-s08 sessions / models"]
   D --> E["阶段 5: 会控风险\ns09 permissions"]
   E --> F["阶段 6: 会产品化\ns10-s12 SDK / packages / comprehensive"]
+  F --> G["阶段 7: 省上下文 + 可观察\ns13-s14 compaction / observability"]
 ```
 
 ## 项目结构
@@ -177,6 +179,9 @@ flowchart LR
 learn-pi-agent/
   README-zh.md              # 中文总纲
   README.md                 # English brief
+  CONTRIBUTING.md           # 章节结构约定、事实纪律、提交前检查
+  00_map/                   # 机制地图（先读）：三层架构 + 横切线 + 读者路径
+    README.md
   s01_agent_loop/           # 每章一个独立主题
     README.md
     code.mjs
@@ -184,6 +189,16 @@ learn-pi-agent/
   s12_comprehensive/
     README.md
     code.mjs
+  s13_compaction/           # 上下文经济学：旧消息换结构化摘要
+    README.md
+    code.mjs
+  s14_observability/        # trace 树 + 默认脱敏
+    README.md
+    code.mjs
+  .evidence/                # 第一手证据：带 file:line 的事实清单 + 真实 trace
+    README.md
+    pi-evidence.json
+    traces/
   .pi/                      # 可被真实 Pi 加载的项目级资源样例
     prompts/
     skills/
@@ -193,7 +208,7 @@ learn-pi-agent/
     REVIEW-guide.md         # review 指南
     fact-maintenance.md     # 事实更新机制
   scripts/
-    check-links.mjs         # 轻量自检
+    check-links.mjs         # 轻量自检（含 trace 资产 + 可选外链存活）
 ```
 
 ## 范围说明
